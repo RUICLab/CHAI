@@ -170,6 +170,7 @@ from utils import llm_accounting
 from utils import token_budget
 from utils.target_build import validate_target_build
 from utils.identity_gate import IdentityCheckUnavailable, verify_identity
+from utils.knob_sensitivity import SensitivityUnavailable, verify_knobs_have_effect
 from utils.direct_extraction import build_plan_entry
 from lib.plan_contract import (
     check_implementation_matches_plan,
@@ -276,6 +277,15 @@ parser.add_argument(
          "asks the model to repair it. Checking this only inside BayesOpt meant "
          "a broken identity point discarded the whole function's plan with no "
          "chance of repair.",
+)
+parser.add_argument(
+    "--knob_sensitivity",
+    choices=["strict", "advisory", "off"],
+    default="strict",
+    help="Behaviourally verify that a declared knob changes what the program "
+         "does. Static conformance can only check that code LOOKS like an "
+         "operator; this checks that the knob is actually wired into the "
+         "computation, which no naming or comment can fake.",
 )
 parser.add_argument(
     "--target_build_gate",
@@ -432,6 +442,8 @@ exp_canonical_backend_used = {}  # function -> canonical backend actions applied
 exp_post_repair_mismatches = 0   # candidates that diverged from the plan after repair
 exp_conformance_violations = {}  # function -> operator-label violations (both arms)
 exp_identity_rejections = 0      # candidates whose declared identity was not the identity
+exp_inert_knob_rejections = 0    # candidates whose knobs changed nothing
+exp_knob_sensitivity = {}        # function -> per-knob behavioural result
 exp_direct_extractions = 0       # plan entries built without a JSON round trip
 exp_json_conversions = 0         # fallback JSON conversion calls
 exp_target_build_skipped = False  # True when the cross toolchain was absent
@@ -1619,6 +1631,55 @@ if not alreadyRun:
                                 + Style.RESET_ALL
                             )
 
+            # Behavioural verification. Static conformance asks whether the
+            # code *looks* like the declared operator; this asks whether the
+            # knob actually changes what the program does. A knob that is
+            # declared, or computed into a local, but never reaches a loop
+            # bound or branch implements no operator, however it is named.
+            if not err_comp and args.knob_sensitivity != "off":
+                if ensure_ground_truth(app_name):
+                    try:
+                        knobs_ok, knob_message, knob_detail = (
+                            verify_knobs_have_effect(
+                                app_name,
+                                f"compilation_testing/ApxFiles_{this_function}",
+                                approximate_function,
+                            )
+                        )
+                        exp_knob_sensitivity[this_function] = knob_detail
+                    except SensitivityUnavailable as unavailable:
+                        knobs_ok, knob_message = True, ""
+                        print(
+                            Fore.YELLOW
+                            + f"  [knob sensitivity] skipped for {this_function}: "
+                              f"{unavailable}"
+                            + Style.RESET_ALL
+                        )
+                    if not knobs_ok:
+                        exp_inert_knob_rejections += 1
+                        if args.knob_sensitivity == "strict":
+                            err_comp = knob_message
+                            rejection_kind = "inert_knobs"
+                            print(
+                                Fore.RED
+                                + f"  [knob sensitivity] {this_function}: no "
+                                  "declared knob changes behaviour"
+                                + Style.RESET_ALL
+                            )
+                        else:
+                            print(
+                                Fore.YELLOW
+                                + f"  [knob sensitivity] advisory: "
+                                  f"{this_function} has no effective knob"
+                                + Style.RESET_ALL
+                            )
+                    elif knob_message:
+                        print(
+                            Fore.YELLOW
+                            + f"  [knob sensitivity] {this_function}: {knob_message}"
+                            + Style.RESET_ALL
+                        )
+
             if (
                 not err_comp
                 and hw_feasible is not None
@@ -1902,6 +1963,9 @@ if not alreadyRun:
         ),
         "identity_gate_mode": args.identity_gate,
         "identity_rejections": exp_identity_rejections,
+        "knob_sensitivity_mode": args.knob_sensitivity,
+        "inert_knob_rejections": exp_inert_knob_rejections,
+        "knob_sensitivity_detail": exp_knob_sensitivity,
         "target_build_gate_mode": args.target_build_gate,
         "target_build_status": exp_target_build_status,
         "canonical_backends": args.canonical_backends,
