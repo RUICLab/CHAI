@@ -269,6 +269,17 @@ parser.add_argument(
          "system-backend condition as a separate, separately-labelled arm.",
 )
 parser.add_argument(
+    "--generation_only",
+    action="store_true",
+    help="Stop after planning and code generation, before ground truth, "
+         "Bayesian optimization and Fused. Plan quality -- operator "
+         "feasibility, provenance, per-function specialisation, identity "
+         "correctness -- is entirely decided by then, and skipping the search "
+         "makes a six-benchmark sweep cheap enough to repeat. Repetition is "
+         "what the measurement needs: the model is not reproducible at "
+         "temperature 0, so a single run fixes no magnitude.",
+)
+parser.add_argument(
     "--identity_gate",
     choices=["strict", "advisory", "off"],
     default="strict",
@@ -1886,6 +1897,7 @@ with open(accepted_plan_path, "w", encoding="utf-8") as file:
             "hardware_profile": hw_profile.name if hw_profile else None,
             "hardware_control": args.hardware_control if hw_profile else "none",
             "operator_catalog": args.operator_catalog,
+        "generation_only": args.generation_only,
         "target_functions_frozen": bool(args.target_functions),
         "target_functions_source": args.target_functions or "llm_selection",
             "plans": accepted_plans,
@@ -1940,6 +1952,7 @@ if not alreadyRun:
         "hardware_control": args.hardware_control if hw_profile else "none",
         "hardware_aware": hw_feasible_full is not None,
         "operator_catalog": args.operator_catalog,
+        "generation_only": args.generation_only,
         "target_functions_frozen": bool(args.target_functions),
         "target_functions_source": args.target_functions or "llm_selection",
         "run_outcome": (
@@ -2009,6 +2022,17 @@ if not alreadyRun:
     )
     if context_report:
         print(f"  → Context measurements: {context_report}")
+
+    if args.generation_only:
+        print(
+            Fore.CYAN
+            + f"[generation-only] Stopping after generation: "
+              f"{exp_functions_succeeded}/{exp_functions_attempted} functions "
+              "produced an accepted plan. Plan-quality metrics are complete; "
+              "no search or simulation was run."
+            + Style.RESET_ALL
+        )
+        raise SystemExit(0)
 
     if exp_functions_succeeded == 0:
         print(

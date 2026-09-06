@@ -45,9 +45,17 @@ TARGET_BUILD_GATE="${TARGET_BUILD_GATE:-strict}"
 CANONICAL_BACKENDS="${CANONICAL_BACKENDS:-off}"
 # Smoke runs may pin a small fixed budget; publishable runs must not.
 BO_AUTO_BUDGET="${BO_AUTO_BUDGET:-1}"
+# Plan quality is settled at generation time. Skipping search and simulation
+# makes a six-benchmark sweep cheap enough to REPEAT, which is what the
+# measurement actually needs: the planner is not reproducible at temperature 0,
+# so one run of a cell fixes no magnitude. Under GENERATION_ONLY the SEEDS list
+# is a list of repeat samples rather than optimizer seeds.
+GENERATION_ONLY="${GENERATION_ONLY:-0}"
 
 RESULTS_ROOT="experiment_results/$RUN_ID"
-TARGETS_DIR="${TARGETS_DIR:-$RESULTS_ROOT/frozen_targets}"
+# Shared across campaigns by default: re-freezing per run costs model calls and
+# risks the arms of two campaigns being compared against different target lists.
+TARGETS_DIR="${TARGETS_DIR:-experiment_results/_frozen_targets}"
 mkdir -p "$RESULTS_ROOT" "$TARGETS_DIR"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
@@ -98,8 +106,30 @@ arm_flags() {
 # configuration is not reproducible, and silent drift between arms is exactly
 # the failure mode this campaign exists to rule out.
 # ---------------------------------------------------------------------------
+# Docker Desktop stops on its own (sleep, updates, memory pressure) and a
+# campaign that starts a minute later then dies on the first cell. Start it and
+# wait, rather than failing a multi-hour run for a daemon that takes 10s.
+if ! docker info >/dev/null 2>&1; then
+  echo "[docker] daemon not responding; attempting to start it"
+  if command -v open >/dev/null 2>&1; then open -a Docker >/dev/null 2>&1 || true; fi
+  for _ in $(seq 1 60); do
+    docker info >/dev/null 2>&1 && break
+    sleep 2
+  done
+fi
+docker info >/dev/null 2>&1 || fail "docker daemon is not available"
+
+# `docker info` succeeding does NOT mean the image store is loaded: Docker
+# Desktop answers the daemon socket before it has finished indexing images, so
+# an inspect issued immediately after reports the image as missing and killed
+# two campaigns here. Wait for the image itself, not just the daemon.
+for _ in $(seq 1 60); do
+  docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1 && break
+  sleep 2
+done
+
 IMAGE_DIGEST="$(docker image inspect "$DOCKER_IMAGE" --format '{{.Id}}' 2>/dev/null)" \
-  || fail "docker image $DOCKER_IMAGE not found"
+  || fail "docker image $DOCKER_IMAGE not found after waiting for the image store"
 MODEL_DIGEST="$(docker run --rm --network host "$DOCKER_IMAGE" \
   python3 -c "
 import json,urllib.request
@@ -133,6 +163,7 @@ json.dump({
     "seeds": [int(s) for s in "$SEEDS".split()],
     "bo_calls": $BO_CALLS,
     "bo_auto_budget": "$BO_AUTO_BUDGET" not in ("0","false","no","off"),
+    "generation_only": "$GENERATION_ONLY" not in ("0","false","no","off"),
     "trace": "$TRACE",
     "capacitors": "$CAPACITORS".split(","),
     "hardware": "$HARDWARE",
@@ -232,7 +263,10 @@ for APP in $APPS; do
       rm -rf logs outputs
       mkdir -p logs outputs
 
-      echo "[$(date +%H:%M:%S)] $ARM / $APP / seed $SEED"
+      GEN_ONLY_FLAG=""
+      [ "$GENERATION_ONLY" != "0" ] && GEN_ONLY_FLAG="--generation_only"
+      LABEL="seed"; [ "$GENERATION_ONLY" != "0" ] && LABEL="rep"
+      echo "[$(date +%H:%M:%S)] $ARM / $APP / $LABEL $SEED"
       set +e
       # shellcheck disable=SC2086
       docker run --rm --network host \
@@ -251,6 +285,7 @@ for APP in $APPS; do
           --target_functions "$TARGET_FILE" \
           --canonical_backends "$CANONICAL_BACKENDS" \
           --target_build_gate "$TARGET_BUILD_GATE" \
+          $GEN_ONLY_FLAG \
           $FLAGS \
         > "$DEST/console.log" 2>&1
       EXIT_CODE=$?
