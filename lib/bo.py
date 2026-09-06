@@ -17,6 +17,7 @@ from utils.error_analyzer import (
     susanError, lqiError, stringSearchError, fftError, sobelError, arError,
     bitcountError, radixbmError, segmentbmError, acceptSobelError,
     acceptActivityrecError, describe_error_bound, error_bound_for,
+    evaluate_error,
 )
 from utils.checkpoints import checkpointOrchestration
 from lib.lsp import lsp_patcher
@@ -64,6 +65,44 @@ AUTO_BUDGET = os.getenv("CHAI_BO_AUTO_BUDGET", "1").strip().lower() not in (
 cur_call = 0
 # progress_bar = tqdm(total=n_calls, desc="Bayesian Optimization Iteration")
 
+def _declared_default(code, knob_name, step_type):
+    """Return the knob's initial value as written in the generated C."""
+    import re as _re
+
+    match = _re.search(rf'{_re.escape(knob_name)}\s*=\s*([0-9.eE\-+]+)', code)
+    if not match:
+        return None
+    try:
+        value = float(match.group(1))
+    except ValueError:
+        return None
+    return int(value) if step_type == "Integer" else value
+
+
+def _range_including_default(range_values, default, step_type):
+    """Widen *range_values* so the declared identity point is reachable.
+
+    A declared default outside its own range means the optimizer can never
+    evaluate the unapproximated program. Clamping the default into the range
+    (the previous behaviour) silently anchored the search on a value the code
+    does not contain, so the same candidate could pass the generation-time
+    identity gate and then fail BayesOpt's identity check on the same metric.
+    Widening keeps the two consistent and records that the plan was malformed.
+    """
+    low, high = range_values[0], range_values[1]
+    if default is None:
+        return [low, high], None
+    if low <= default <= high:
+        return [low, high], None
+    new_low, new_high = min(low, default), max(high, default)
+    if step_type == "Integer":
+        new_low, new_high = int(new_low), int(new_high)
+    return [new_low, new_high], (
+        f"widened range [{low}, {high}] to [{new_low}, {new_high}] so the "
+        f"declared default {default} is reachable"
+    )
+
+
 def createSearchSpace(pathToJson):
     with open(pathToJson, "r") as file:
         approximation_data = json.load(file)
@@ -72,23 +111,27 @@ def createSearchSpace(pathToJson):
     space = []
     for approximation_dict in approximation_data:
         _, knob_ranges, knob_step_size = normalize_knob_metadata(approximation_dict)
+        code = approximation_dict.get("completeFunction", "")
 
         for i, knob_range in enumerate(knob_ranges):
             for knob_name, range_values in knob_range.items():
-                if knob_step_size[i][knob_name] == "Integer":
-                    space.append(
-                        Integer(range_values[0], range_values[1], name=knob_name)
-                    )
-                if knob_step_size[i][knob_name] == "Real":
-                    space.append(Real(range_values[0], range_values[1], name=knob_name))
+                step_type = knob_step_size[i][knob_name]
+                default = _declared_default(code, knob_name, step_type)
+                bounds, widened = _range_including_default(
+                    range_values, default, step_type
+                )
+                if widened:
+                    Dprint(f"[BayesOpt] knob {knob_name}: {widened}")
+                if step_type == "Integer":
+                    space.append(Integer(bounds[0], bounds[1], name=knob_name))
+                if step_type == "Real":
+                    space.append(Real(bounds[0], bounds[1], name=knob_name))
 
     return space
 
 
 def getBaselineKnobs(pathToJson):
     """Extract baseline (default) knob values from JSON, in the same order as createSearchSpace."""
-    import re as _re
-
     with open(pathToJson, "r") as file:
         approximation_data = json.load(file)
     validate_plan_entries(approximation_data)
@@ -101,18 +144,16 @@ def getBaselineKnobs(pathToJson):
         for i, knob_range in enumerate(knob_ranges):
             for knob_name, range_values in knob_range.items():
                 step_type = knob_step_size[i][knob_name]
-                # Extract the default value from the function code
-                match = _re.search(rf'{knob_name}\s*=\s*([0-9.eE\-+]+)', code)
-                if match:
-                    val = float(match.group(1)) if step_type == "Real" else int(float(match.group(1)))
-                else:
-                    # Fallback: use the "no approximation" end of the range
-                    val = float(range_values[0]) if step_type == "Real" else range_values[0]
-                # Clamp to range bounds so x0 is always valid
-                lo, hi = (float(range_values[0]), float(range_values[1])) if step_type == "Real" else (range_values[0], range_values[1])
-                val = max(lo, min(hi, val))
-                if step_type == "Integer":
-                    val = int(val)
+                val = _declared_default(code, knob_name, step_type)
+                if val is None:
+                    # No initializer found: fall back to the conservative end.
+                    val = (
+                        float(range_values[0]) if step_type == "Real"
+                        else int(range_values[0])
+                    )
+                # Do NOT clamp. createSearchSpace widens the dimension to
+                # include this value, so the identity point stays exactly what
+                # the generated code contains.
                 baseline.append(val)
 
     return baseline
@@ -412,31 +453,11 @@ def evaluateKnobs(*params):
         return 100.0
 
     # Get the Error
-    if app_name == "susan":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: susanError("knob_tuning"))
-    elif app_name == "sobel-iclib":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: sobelError("knob_tuning"))
-    elif app_name == "lqi-iclib" or app_name == "link-estimator":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: lqiError("knob_tuning"))
-    elif app_name == "stringsearch-iclib":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: stringSearchError("knob_tuning"))
-    elif app_name == "fft-iclib":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: fftError("knob_tuning"))
-    elif app_name == "ar-iclib":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: arError("knob_tuning"))
-    elif app_name == "bc-iclib":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: bitcountError("knob_tuning"))
-    elif app_name == "radix-bm":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: radixbmError("knob_tuning"))
-    elif app_name == "segment-bm":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: segmentbmError("knob_tuning"))
-    elif app_name == "accept-sobel":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: acceptSobelError("knob_tuning"))
-    elif app_name == "accept-activityrec":
-        error = _safe_error_evaluation(app_name, candidate_knobs, lambda: acceptActivityrecError("knob_tuning"))
-    else:
-        Dprint(f"WARNING: Unknown app_name '{app_name}' — returning penalty error 1.0")
-        error = 1.0
+    # One dispatch table, shared with the generation-time identity gate, so a
+    # candidate cannot pass one check and fail the other on a different metric.
+    error = _safe_error_evaluation(
+        app_name, candidate_knobs, lambda: evaluate_error(app_name, "knob_tuning")
+    )
 
     if error is None:
         # The evaluator already logged the exact build/run/output failure.

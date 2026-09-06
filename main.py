@@ -169,6 +169,7 @@ from utils.source_functions import recover_source_entities
 from utils import llm_accounting
 from utils import token_budget
 from utils.target_build import validate_target_build
+from utils.identity_gate import IdentityCheckUnavailable, verify_identity
 from utils.direct_extraction import build_plan_entry
 from lib.plan_contract import (
     check_implementation_matches_plan,
@@ -265,6 +266,16 @@ parser.add_argument(
          "a hand-written benchmark-specific implementation measures that "
          "implementation, not the planner. Turn ON only to report the "
          "system-backend condition as a separate, separately-labelled arm.",
+)
+parser.add_argument(
+    "--identity_gate",
+    choices=["strict", "advisory", "off"],
+    default="strict",
+    help="Verify during generation that the declared knob defaults reproduce "
+         "the original function. 'strict' (default) rejects the candidate and "
+         "asks the model to repair it. Checking this only inside BayesOpt meant "
+         "a broken identity point discarded the whole function's plan with no "
+         "chance of repair.",
 )
 parser.add_argument(
     "--target_build_gate",
@@ -420,6 +431,7 @@ exp_candidate_rejections = {}    # rejection kind -> count (semantic vs build)
 exp_canonical_backend_used = {}  # function -> canonical backend actions applied
 exp_post_repair_mismatches = 0   # candidates that diverged from the plan after repair
 exp_conformance_violations = {}  # function -> operator-label violations (both arms)
+exp_identity_rejections = 0      # candidates whose declared identity was not the identity
 exp_direct_extractions = 0       # plan entries built without a JSON round trip
 exp_json_conversions = 0         # fallback JSON conversion calls
 exp_target_build_skipped = False  # True when the cross toolchain was absent
@@ -491,6 +503,28 @@ def load_frozen_targets(path, app_name):
             + Style.RESET_ALL
         )
     return targets, summary
+
+
+_ground_truth_ready = False
+
+
+def ensure_ground_truth(app_name):
+    """Generate the reference output once, on first use."""
+    global _ground_truth_ready
+    if _ground_truth_ready:
+        return True
+    try:
+        generateGroundTruth(app_name)
+        _ground_truth_ready = True
+        return True
+    except Exception as error:
+        print(
+            Fore.YELLOW
+            + f"[ground truth] Could not generate reference output for "
+              f"{app_name}: {error}"
+            + Style.RESET_ALL
+        )
+        return False
 
 
 def build_function_constraint_text(function_feasible, function_name):
@@ -1550,6 +1584,42 @@ if not alreadyRun:
             # used to pass generation and fail only once BayesOpt was already
             # spending simulation budget on it. Under CHAI's control plane the
             # candidate must cross-compile for MSP430 and fit the device.
+            # Verify the declared identity point NOW, while the model can
+            # still be asked to fix it. Checking it inside BayesOpt meant the
+            # only possible response was to discard the whole function's plan.
+            if not err_comp and args.identity_gate != "off":
+                if ensure_ground_truth(app_name):
+                    try:
+                        identity_ok, identity_message = verify_identity(
+                            app_name, f"compilation_testing/ApxFiles_{this_function}"
+                        )
+                    except IdentityCheckUnavailable as unavailable:
+                        identity_ok, identity_message = True, ""
+                        print(
+                            Fore.YELLOW
+                            + f"  [identity gate] skipped for {this_function}: "
+                              f"{unavailable}"
+                            + Style.RESET_ALL
+                        )
+                    if not identity_ok:
+                        exp_identity_rejections += 1
+                        if args.identity_gate == "strict":
+                            err_comp = identity_message
+                            rejection_kind = "identity"
+                            print(
+                                Fore.RED
+                                + f"  [identity gate] {this_function}: declared "
+                                  "defaults are not the identity point"
+                                + Style.RESET_ALL
+                            )
+                        else:
+                            print(
+                                Fore.YELLOW
+                                + f"  [identity gate] advisory: {this_function} "
+                                  "defaults are not the identity point"
+                                + Style.RESET_ALL
+                            )
+
             if (
                 not err_comp
                 and hw_feasible is not None
@@ -1831,6 +1901,8 @@ if not alreadyRun:
             "skipped" if exp_target_build_skipped
             else ("enforced" if hw_feasible_full is not None else "not_applicable")
         ),
+        "identity_gate_mode": args.identity_gate,
+        "identity_rejections": exp_identity_rejections,
         "target_build_gate_mode": args.target_build_gate,
         "target_build_status": exp_target_build_status,
         "canonical_backends": args.canonical_backends,

@@ -735,3 +735,57 @@ def bitcountError(pathToCodebase):
         )
     finally:
         os.chdir(cwd)
+
+# ---------------------------------------------------------------------------
+#  Shared evaluator dispatch
+# ---------------------------------------------------------------------------
+
+#: Benchmark name -> error evaluator. Previously this mapping existed only as
+#: an if/elif chain inside ``lib/bo.py``, so nothing else could measure a
+#: candidate's error without duplicating it.
+ERROR_EVALUATORS = {
+    "susan": lambda p: susanError(p),
+    "sobel-iclib": lambda p: sobelError(p),
+    "accept-sobel": lambda p: acceptSobelError(p),
+    "lqi-iclib": lambda p: lqiError(p),
+    "link-estimator": lambda p: lqiError(p),
+    "stringsearch-iclib": lambda p: stringSearchError(p),
+    "fft-iclib": lambda p: fftError(p),
+    "ar-iclib": lambda p: arError(p),
+    "accept-activityrec": lambda p: acceptActivityrecError(p),
+    "bc-iclib": lambda p: bitcountError(p),
+    "radix-bm": lambda p: radixbmError(p),
+    "segment-bm": lambda p: segmentbmError(p),
+}
+
+
+def evaluate_error(app_name, path):
+    """Measure *app_name*'s error for the candidate built in *path*."""
+    evaluator = ERROR_EVALUATORS.get(app_name)
+    if evaluator is None:
+        raise RuntimeError(f"no error evaluator registered for {app_name!r}")
+    return evaluator(path)
+
+
+#: Files that carry the reference output for each benchmark family.
+GROUND_TRUTH_ARTIFACTS = {
+    "susan": ["out.pgm"],
+    "sobel-iclib": ["out.pgm"],
+    "sobel-esp": ["out.pgm"],
+    "accept-sobel": ["out.pgm"],
+    "stringsearch-iclib": ["ground_truth.csv"],
+    "ar-iclib": ["ground_truth.csv"],
+    "accept-activityrec": ["ground_truth.csv"],
+    "fft-iclib": ["ground_truth.csv"],
+    "bc-iclib": ["ground_truth.csv"],
+    "radix-bm": ["ground_truth.csv"],
+    "segment-bm": ["ground_truth.csv"],
+    "lqi-iclib": ["ground_truth.txt"],
+    "link-estimator": ["ground_truth.txt"],
+}
+
+
+def ground_truth_files(app_name):
+    """Return the reference artifacts *app_name* is scored against."""
+    return list(GROUND_TRUTH_ARTIFACTS.get(app_name, []))
+

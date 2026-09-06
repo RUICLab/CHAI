@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import lib.bo as bo
@@ -98,3 +99,29 @@ def test_fixed_plan_without_dimensions_is_evaluated_once(monkeypatch):
     assert score == 0.75
     assert knobs == []
 
+
+
+def test_identity_point_is_never_clamped_out_of_its_own_range(tmp_path):
+    """The search space must contain the value the generated code declares.
+
+    Clamping a declared default into a too-narrow range anchored BayesOpt on a
+    value the code does not contain, so a candidate could pass the
+    generation-time identity gate and then fail BayesOpt's identity check on
+    the very same metric.
+    """
+    plan = tmp_path / "apx_all.json"
+    plan.write_text(json.dumps([{
+        "functionName": "f",
+        "completeFunction": "void f(void){\n  float precision_scale = 1.0;\n}",
+        "knobVariables": "['precision_scale']",
+        "knobRanges": "[{'precision_scale': [0.9, 0.99]}]",
+        "knobStepSize": "[{'precision_scale': 'Real'}]",
+    }]))
+
+    baseline = bo.getBaselineKnobs(str(plan))
+    space = bo.createSearchSpace(str(plan))
+
+    assert baseline == [1.0], "the declared default must survive verbatim"
+    assert space[0].low <= 1.0 <= space[0].high, (
+        "the dimension must be widened to contain the identity point"
+    )
