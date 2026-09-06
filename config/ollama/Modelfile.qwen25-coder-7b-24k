@@ -1,0 +1,35 @@
+FROM qwen2.5-coder:7b
+
+# Sizing this window from measurements, not from a guess.
+#
+# The earlier comment here claimed "roughly 15k tokens" for CHAI's prompts. That
+# was never measured and is about 2x high for the fixed part.
+#
+# Measured fixed prompt material (chars), per benchmark, after scoping the
+# added-operator few-shot examples to the operators the gatekeeper leaves
+# feasible for that app:
+#
+#     before scoping   27,341  (every app, all ten examples)
+#     ar-iclib         21,753     sobel-iclib   22,561
+#     stringsearch     22,809     fft-iclib     20,668
+#     lqi-iclib        21,533     bc-iclib      20,759
+#
+# That is ~5.9-6.5K tokens at 3.5 chars/token, plus the benchmark source
+# (546-3,173 tokens) and the code-base summary.
+#
+# The part that actually needs headroom is parent conversation history. Each
+# parent function used to contribute its full purpose + plan + generated C +
+# the same C again inside the JSON conversion; on a nine-function application
+# that is eighteen copies of function bodies. utils/context.py now summarises
+# each parent to its purpose, signature, and knobs, and the JSON conversion
+# round trip is gone entirely when a structured plan is available.
+#
+# utils/token_budget.py records the real per-function context size to
+# logs/context_budget_<app>_<profile>.json on every run. Resize this window
+# from those files. Do not shrink it on the basis of this comment alone:
+# an undersized num_ctx truncates silently.
+#
+# The stock Ollama runtime defaults to 4k, which discards most of the prompt.
+PARAMETER num_ctx 24576
+PARAMETER num_predict 2048
+PARAMETER temperature 0

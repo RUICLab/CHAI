@@ -53,6 +53,7 @@ from lib.technique_registry import (
     _load_cards_into_registry,
 )
 from lib.hw_validator import (
+    extract_technique_ids_from_convo,
     extract_technique_ids_from_text,
     clamp_apx_json,
 )
@@ -405,6 +406,33 @@ class TestClamp:
             assert remaining[0]["technique_number"] == 1
         finally:
             shutil.rmtree(d)
+
+    def test_clamp_rejects_entry_when_any_declared_operator_is_infeasible(self, tmp_path):
+        apx_path = tmp_path / "apx_all.json"
+        apx_path.write_text(json.dumps([
+            {"functionName": "safe", "technique_numbers": [1, 2]},
+            {"functionName": "unsafe", "technique_numbers": [1, 999]},
+        ]))
+        feasible = {
+            1: TechniqueEntry(1, "One"),
+            2: TechniqueEntry(2, "Two"),
+        }
+
+        dropped = clamp_apx_json(str(apx_path), feasible)
+
+        assert dropped == [999]
+        assert json.loads(apx_path.read_text()) == [
+            {"functionName": "safe", "technique_numbers": [1, 2]}
+        ]
+
+
+def test_conversation_operator_extraction_ignores_human_catalog_ids():
+    convo = [
+        ("human", "Allowed: T1, T2, T27"),
+        ("ai", "APPLIED_TECHNIQUES: T27\nOther considered options: T1, T2"),
+    ]
+
+    assert extract_technique_ids_from_convo(convo) == {27}
 
 
 # ═══════════════════════════════════════════════════════════════════════

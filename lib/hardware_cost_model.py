@@ -17,6 +17,8 @@ first, or it can simply inform the terminal output.
 
 from typing import Dict, List, Tuple
 
+import os
+
 from lib.hardware_profile import HardwareProfile
 from lib.technique_registry import TechniqueEntry
 from utils.utils import Dprint
@@ -26,34 +28,103 @@ from utils.utils import Dprint
 #  Cost estimation
 # ---------------------------------------------------------------------------
 
+#: Relative energy cost of the RAM an operator occupies, per KB, expressed in
+#: the same arbitrary units as ``compute_cost_relative``. On an intermittently
+#: powered device, retained state is the dominant cost of a power cycle, so
+#: memory pressure is weighted rather than treated as a rounding term.
+MEMORY_ENERGY_WEIGHT = 2.0
+
+#: Extra cost charged to an operator that needs floating point on a target with
+#: no FPU. The gatekeeper removes operators that *require* an FPU, but several
+#: operators are implementable either way and should be ranked accordingly.
+SOFT_FP_PENALTY = 3.0
+
+
 def estimate_cost(tech: TechniqueEntry, hw: HardwareProfile) -> float:
     """
-    Produce a scalar cost score for running *tech* on *hw*.
+    Produce a scalar cost score for applying *tech* on *hw* (lower is better).
 
-    The score captures the notion that a technique with high
-    ``compute_cost_relative`` will be proportionally more expensive on a
-    slower clock, and that memory pressure is also a concern.
+    This is an *overhead* score, not a savings estimate: it ranks how much the
+    operator's own machinery costs on this target. It deliberately does not
+    claim to predict the saving an operator delivers for a particular function,
+    which depends on that function's structure and is not knowable from the
+    registry. Treat the ranking as a prior over which operators to try first.
 
-    Returns
-    -------
-    float
-        Non-negative cost score (lower is better).
+    Terms:
+
+    * clock-scaled compute overhead, so a slower part penalises expensive
+      operators more;
+    * memory pressure as a fraction of available RAM, weighted by
+      ``MEMORY_ENERGY_WEIGHT`` because retained state dominates the cost of a
+      power cycle on an intermittently powered device;
+    * a soft floating-point penalty when the target has no FPU, since every
+      float operation is software-emulated.
     """
-    # Base clock-scaled cost
     compute_factor = tech.compute_cost_relative * (100.0 / hw.clock_mhz)
 
-    # Memory pressure penalty: fraction of available RAM consumed
     mem_pressure = (tech.memory_cost_kb / hw.ram_kb) if hw.ram_kb > 0 else 0.0
 
-    # FPU penalty: if the technique *officially* doesn't need FPU but the
-    # technique's description hints at float work, software emulation adds
-    # overhead.  For registry entries that *require* FPU, we have already
-    # filtered them in the gatekeeper — so no extra penalty here.
-    # (Kept as a future extension point.)
+    fp_penalty = 0.0
+    if not hw.has_fpu and _description_implies_float(tech):
+        fp_penalty = SOFT_FP_PENALTY * tech.compute_cost_relative
 
-    cost = compute_factor + mem_pressure * 0.5   # weighted sum
+    cost = compute_factor + mem_pressure * MEMORY_ENERGY_WEIGHT + fp_penalty
 
     return round(cost, 4)
+
+
+_FLOAT_HINTS = (
+    "float", "floating", "precision", "spectral", "fft", "magnitude",
+    "interpolat", "probabilis", "model",
+)
+
+
+def _description_implies_float(tech: TechniqueEntry) -> bool:
+    """Heuristic: does this operator usually involve floating-point work?"""
+    text = f"{tech.name} {tech.description}".lower()
+    return any(hint in text for hint in _FLOAT_HINTS)
+
+
+#: Cost-score units treated as equivalent to one millijoule of budget.
+#:
+#: This is a **screening constant, not a calibrated energy model.** The cost
+#: score above is in arbitrary units derived from hand-assigned
+#: ``compute_cost_relative`` values; ``energy_budget_mj`` is in millijoules.
+#: Comparing them requires a scale factor, and this one is a stated assumption
+#: rather than a measurement. It exists so ``energy_budget_mj`` -- which was
+#: parsed from every profile, printed in the startup banner, and then consulted
+#: by nothing -- becomes load-bearing and falsifiable instead of decorative.
+#:
+#: Do not present energy-budget rejections as measured energy results. To
+#: calibrate this properly, measure per-operator overhead on the target and
+#: replace both this constant and ``compute_cost_relative``.
+COST_SCORE_UNITS_PER_MJ = float(
+    os.getenv("CHAI_COST_SCORE_UNITS_PER_MJ", "1.0")
+)
+
+
+def energy_budget_headroom(tech: TechniqueEntry, hw: HardwareProfile):
+    """Return ``(score, allowance)`` for the energy screen, or ``None``.
+
+    ``None`` means the profile declares no usable budget.
+    """
+    budget = getattr(hw, "energy_budget_mj", None)
+    if not budget or budget <= 0:
+        return None
+    return estimate_cost(tech, hw), float(budget) * COST_SCORE_UNITS_PER_MJ
+
+
+def exceeds_energy_budget(tech: TechniqueEntry, hw: HardwareProfile) -> bool:
+    """True when an operator's overhead score exceeds the screened budget.
+
+    See :data:`COST_SCORE_UNITS_PER_MJ` for why this is a screen rather than an
+    energy measurement.
+    """
+    headroom = energy_budget_headroom(tech, hw)
+    if headroom is None:
+        return False
+    score, allowance = headroom
+    return score > allowance
 
 
 # ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import urllib.parse
 import sys
 import os
 from utils.utils import Dprint
+from utils.source_functions import find_source_function_line_range
 
 # LSP init and api calls
 def start_clangd():
@@ -160,7 +161,10 @@ def lsp_extractor(file_path, positions_file_flag=False, print_flag=False):
         Dprint("Symbols response: ",symbols_response)
         Dprint("\n\n ----------- \n\n")
 
-    symbols_response = [item for item in symbols_response["result"]] 
+    symbols_response = [
+        item for item in symbols_response["result"]
+        if item.get("kind") == 12
+    ]
 
     # Create 'functions' directory if it does not exist
     if not os.path.exists("functions"):
@@ -255,6 +259,26 @@ def lsp_patcher(dir_path, json_file_name):
 
         function_symbols = [item for item in symbols_response["result"] if item.get("kind") == 12]
         symbol_map = {item['name']: item['location']['range'] for item in function_symbols}
+
+        # clangd can occasionally omit a valid local definition (observed for
+        # fft-iclib's ``cexp``). Recover its line range deterministically so a
+        # requested patch is never silently skipped.
+        source_text = ''.join(file_lines)
+        for approx_function in functions:
+            func_name = approx_function['functionName']
+            if func_name in symbol_map:
+                continue
+            line_range = find_source_function_line_range(source_text, func_name)
+            if line_range:
+                start_line, end_line = line_range
+                symbol_map[func_name] = {
+                    'start': {'line': start_line, 'character': 0},
+                    'end': {'line': end_line, 'character': 0},
+                }
+            else:
+                raise ValueError(
+                    f"Cannot patch '{func_name}': no local source definition was found in {file_path}"
+                )
 
         # Sort the functions by their position in reverse order so replacements don't affect the positions of others
         for approx_function in reversed(sorted(functions, key=lambda x: symbol_map[x['functionName']]['start']['line'] if x['functionName'] in symbol_map else -1)):

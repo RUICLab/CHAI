@@ -1,0 +1,42 @@
+{context}
+
+OPERATOR SELECTION FOR A SINGLE FUNCTION
+
+You are choosing which approximation operators are plausible for exactly one
+function. This is a narrowing step, not the implementation step. Do not write
+any C code yet.
+
+Function under consideration: {function_name}
+
+```c
+{function_code}
+```
+
+These operators are already known to be feasible on this target's hardware.
+You may only choose from this list:
+
+{feasible_techniques}
+
+Selection rules:
+- Choose an operator ONLY if this specific function contains the code structure
+  the operator acts on. An operator that is feasible for the application as a
+  whole is often meaningless for an individual function.
+- A loop-based operator requires a loop in THIS function.
+- A precision operator requires arithmetic in THIS function.
+- A data-structure or spectral operator requires that data structure or that
+  transform in THIS function.
+- If a function is a small accessor, a wrapper, or pure control flow, it is
+  correct to select nothing at all.
+- Select at most {max_operators} operators. Prefer the smallest set that could
+  plausibly reduce this function's cycle count.
+
+Answer in exactly this format and nothing else:
+
+SELECTED_OPERATORS: T<number>, T<number>, ...
+REASON: <one short sentence per selected operator, naming the code structure in
+this function that the operator acts on>
+
+If no operator applies to this function, answer:
+
+SELECTED_OPERATORS: none
+REASON: <why this function has no approximable structure>

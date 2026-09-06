@@ -37,10 +37,14 @@ int binary_search(int arr[], int size, int target) {
         else high = mid - 1;
         iterations++;
         if (early_exit_enabled && iterations >= max_iterations) {
-            break;
+            /* Approximate answer: give up and report the closest probe.
+               Only reachable when the knob is enabled. */
+            return arr[mid] <= target ? mid : -1;
         }
     }
-    return mid;
+    /* Identity path: with early_exit_enabled = 0 this function is
+       bit-identical to the original, including the -1 failure return. */
+    return -1;
 }
 ```
 

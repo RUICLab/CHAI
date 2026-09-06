@@ -1,16 +1,75 @@
-Now, let's move to the planning step. For the given function, {function_name}, what are the possible approximations that can be performed?
+{add_error}
 
-If there exists a knob variable (a variable that, when changed, increases or decreases the level of approximations), state that it is a candidate.
+PLANNING STEP for `{function_name}`
 
-A point to note, this code is ment for {platform_architecture} architecture, space for large variables(like lookup table) is limited. Your suggest changes should be possiable within the architecture.
+Produce an approximation plan for this one function. Do not write the
+approximated C yet: this step decides *what* will be done, and the next step
+must implement exactly this plan and nothing else.
+
+Target architecture: {platform_architecture}
+Space for large variables (such as lookup tables) is limited; every proposal
+must fit within that architecture.
+
+Answer with a PLAN block in exactly this format. One record per operator, at
+most {max_operators} records:
+
+PLAN:
+- OPERATOR: T<number>
+  REGION: <the exact loop, call, or statement in this function that changes>
+  KNOB: <identifier> | <Integer|Real> | RANGE [<low>, <high>] | IDENTITY <value>
+  BENEFIT: <which hardware cost this removes: iterations, FP emulation,
+            memory traffic, or calls>
+  PRECONDITION: <what must be true of the inputs for this to be safe>
+  INVARIANT: <what remains true of the output at every knob setting>
+
+Rules that make a record valid:
+- OPERATOR must be an exact ID from the operator contract above. Nothing else.
+- REGION must name code that actually exists in this function.
+- Every operator must expose at least one knob, and the IDENTITY value must be
+  inside RANGE. At the IDENTITY setting the function must reproduce the
+  original behaviour exactly.
+- Do not list an operator you cannot tie to a concrete REGION. A shorter plan
+  that is fully implementable is better than a long speculative one.
+- If two operators would interact (one changes what the other sees), say so in
+  a final `INTERACTIONS:` line. Otherwise write `INTERACTIONS: none`.
+
+After the PLAN block, add one short paragraph headed `RATIONALE:` explaining
+why this plan reduces cycles on this architecture.
+
+### Worked example (copy this shape exactly)
+
+For a function `void filter(int *buf, int n)` containing
+`for (int i = 0; i < n; i++) {{ buf[i] = buf[i] * 3 / 4; }}`:
+
+```
+PLAN:
+- OPERATOR: T1
+  REGION: the for loop over i in buf[i]
+  KNOB: iteration_pct | Integer | RANGE [50, 100] | IDENTITY 100
+  BENEFIT: iterations
+  PRECONDITION: n > 0 and buf holds at least n elements
+  INVARIANT: every written element stays within the original value range
+INTERACTIONS: none
+
+RATIONALE: Truncating the loop removes iterations proportionally, and at
+iteration_pct = 100 the function is identical to the original.
+```
+
+Note three things that make that KNOB line valid, because these are the most
+common mistakes:
+
+1. **IDENTITY is present.** It names the value at which the function
+   reproduces the original exactly. It is never optional.
+2. **The RANGE is not a single point.** `RANGE [1, 1]` gives the optimizer
+   nothing to search and describes a no-op, not an approximation.
+3. **The knob is a NEW variable name.** Never reuse a parameter or an existing
+   local (here `n`, `i` and `buf` are all forbidden as knob names).
+
+If no operator from the contract applies to this function, answer exactly:
+
+PLAN: none
+RATIONALE: <why this function has no approximable structure>
 
 # === AUTO-GENERATED START ===
-### Technique 31 — 4-Bit Quantization
-**When to use:** When the application processes integer data (sensor readings, pixel values, counters) where the full 8/16-bit range is not needed and moderate accuracy loss is acceptable.
-**When NOT to use:** When values require full dynamic range, when the application performs floating-point arithmetic, or when output precision is critical (e.g., cryptographic hashes, CRC checksums).
-
-### Technique 32 — 4-bit Quantization for Sensor Data
-**When to use:** Use when sensor data has sufficient dynamic range that 16 levels can capture meaningful variations, when memory is severely constrained, or when sensor noise already limits effective precision below 4 bits.
-**When NOT to use:** Avoid when the application requires high precision measurements, when sensor data is used for safety-critical decisions, or when the sensor's natural output already has low bit depth.
 
 # === AUTO-GENERATED END ===

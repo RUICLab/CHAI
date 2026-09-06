@@ -30,3 +30,36 @@ Approximation techniques in computing are strategies used to simplify or reduce 
 28. Hierarchical Feature Extraction (feature-level approximation): Reduces feature-extraction compute by computing cheap tier-1 features (mean, variance, energy, zero-crossing count per channel) for every sliding window, then selectively computing expensive tier-2 features (spectral centroid, spectral bandwidth, top-k FFT magnitude bins) only for windows whose gating score exceeds a threshold. Skipped windows fill tier-2 slots with zeros, preserving fixed classifier input dimension. A full_rate knob forces a fraction of windows to always compute tier-2 for calibration. Trades feature completeness for reduced FFT operations. Applicable to activity recognition, gesture detection, and sensor-based classification. Energy model: cycles_ratio = (1 + skip_ratio * tier2_cost_ratio) / (1 + tier2_cost_ratio), where tier2_cost_ratio ≈ log2(window_size). Knobs: hfe_enabled [0, 1], hfe_gate_tau [0.0, 2.0] Real (0.0 = baseline, all tier-2 computed), hfe_full_rate [0.0, 1.0] Real (fraction of windows always getting tier-2), hfe_mode ["energy", "accuracy"].
 29. Radix Variation (arithmetic simplification): Replaces expensive base-10 digit extraction (repeated / 10 and % 10 — software-emulated division on MSP430, ~150 cycles each) with power-of-two radix operations (>> 4 and & 0xF for base-16, ~1 cycle each). Also supports reducing max_digits to truncate output and skip_leading_zeros to bypass zero-valued leading digits. Applicable to integer-to-string conversion, hash/signature formatting, histogram bucket labeling, and any code that extracts decimal digits from integers. When radix_mode=10 and max_digits=original length, output is bit-identical to baseline. Energy model: cycles_ratio ≈ (shift_cost / div_cost) × (max_digits / original_digits); for radix_mode=16 on MSP430 this is ~1/150 per digit. Knobs: radix_mode [2, 16] Integer (10 = baseline exact base-10; 16 = hex; 8 = octal; 2 = binary), max_digits [1, 10] Integer (original = baseline), skip_leading_zeros [0, 1] Integer (0 = baseline).
 30. Pattern Segmentation (data-level approximation): Identifies repeated, homogeneous, or low-variation regions ("segments") in an input array/signal/image row and avoids doing full computation on every element. Instead, computes at representative points (every k-th element, segment boundaries, or change-triggered anchors) and fills non-representative positions using hold-last or linear interpolation. Distinct from loop perforation: all output positions are still written; skipped positions reuse a previously computed result rather than being omitted. Applicable to loops over arrays/signals/images where adjacent elements are correlated — feature extraction, filtering, thresholding, scanning, distance checks, scoring. When segment_len=1 and policy=every_k, every element is computed exactly (baseline-equivalent). Energy model: cycles_ratio ≈ 1/segment_len + fill_overhead (~2-5 cycles per filled element). Knobs: segment_len [1, 8] Integer (1 = baseline, compute every element), change_threshold [0, 50] Integer (0 = always recompute, baseline), policy [0, 2] Integer (0=every_k baseline, 1=boundary_only, 2=change_triggered), fill_strategy [0, 1] Integer (0=hold_last, 1=linear_interp).
+
+## Choosing between overlapping operators
+
+Several operators reduce work in similar ways. Use these rules to pick exactly
+one; do not label the same transformation with two IDs.
+
+| If the code change is... | Use | Not |
+| --- | --- | --- |
+| A loop runs fewer of its iterations, decided before the loop starts | **T1** Loop Perforation | T4, T7, T21 |
+| A whole call or block is conditionally not executed at all | **T4** Task Skipping | T1, T7 |
+| An iterative computation stops once a fixed work budget is spent | **T7** Truncated Computation | T1, T21 |
+| An iterative computation stops once a *measured convergence test* passes | **T21** Early-Exit | T7 |
+| Samples are dropped along a time axis and reconstructed | **T23** Temporal Decimation | T1, T12 |
+| Pixels/points are skipped along a spatial axis and filled in | **T22** Spatial Downsampling | T1, T30 |
+| Values are computed at representative points and held/interpolated between them | **T30** Pattern Segmentation | T22, T23 |
+
+And for the precision family:
+
+| If the code change is... | Use | Not |
+| --- | --- | --- |
+| A fixed narrower numeric representation throughout (shift, mask, narrowing cast) | **T2** Precision Scaling | T9, T10 |
+| The representation width is chosen at run time from a measured condition | **T9** Dynamic Precision | T2 |
+| Values are mapped onto a smaller set of discrete levels | **T10** Quantization | T2, T12 |
+| The *data* stored or transported is reduced, not the arithmetic width | **T12** Data Approximation | T2, T10 |
+
+Two rules that override the table:
+
+1. **The label must match the code.** An operator ID is rejected unless the
+   generated C contains that operator's distinctive structure, controlled by a
+   declared knob. Printing an ID is not provenance.
+2. **Prefer the most specific operator that fits.** If a benchmark-specific
+   operator (T22-T30) describes the transformation exactly, use it instead of a
+   general one.

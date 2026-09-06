@@ -98,7 +98,11 @@ TECHNIQUE_REGISTRY: Dict[int, TechniqueEntry] = {
         5, "Approximate Data Structures",
         memory_cost_kb=0.5,
         compute_cost_relative=0.6,
-        description="Bloom filters, skip lists, etc.",
+        applicable_apps=["stringsearch-iclib"],
+        description=(
+            "Bloom filters, skip lists and similar probabilistic containers. "
+            "Requires an existing lookup structure to replace."
+        ),
     ),
     6: TechniqueEntry(
         6, "Probabilistic Algorithms",
@@ -154,32 +158,53 @@ TECHNIQUE_REGISTRY: Dict[int, TechniqueEntry] = {
         requires_fpu=True,
         memory_cost_kb=1.0,
         compute_cost_relative=0.8,
-        description="Combine models of varying accuracy.",
+        applicable_apps=["ar-iclib", "accept-activityrec"],
+        description=(
+            "Combine models of varying accuracy. Requires the application to "
+            "contain more than one model of the same quantity."
+        ),
     ),
     15: TechniqueEntry(
         15, "Relaxed Consistency",
         memory_cost_kb=0.0,
         compute_cost_relative=0.3,
-        description="Ease consistency in distributed systems.",
+        applicable_apps=[],
+        description=(
+            "Ease consistency in distributed systems. Not applicable to "
+            "single-core bare-metal benchmarks: there is no replica or "
+            "coherence protocol to relax."
+        ),
     ),
     16: TechniqueEntry(
         16, "Sparse Computation",
         memory_cost_kb=0.0,
         compute_cost_relative=0.3,
-        description="Skip zero elements in sparse data.",
+        applicable_apps=["fft-iclib", "ar-iclib", "accept-activityrec"],
+        description=(
+            "Skip zero elements in sparse data. Requires a genuinely sparse "
+            "array or spectrum, not merely a loop over dense data."
+        ),
     ),
     17: TechniqueEntry(
         17, "Neural Network Pruning",
         requires_fpu=True,
         memory_cost_kb=2.0,
         compute_cost_relative=0.9,
-        description="Trim neural connections.",
+        applicable_apps=[],
+        description=(
+            "Trim neural connections. Not applicable: none of these "
+            "benchmarks contains a neural network."
+        ),
     ),
     18: TechniqueEntry(
         18, "Approximate Joins",
         memory_cost_kb=0.5,
         compute_cost_relative=0.5,
-        description="Non-exact database joins.",
+        applicable_apps=[],
+        description=(
+            "Non-exact database joins. Not applicable: none of these "
+            "benchmarks performs a relational join."
+        ),
     ),
     19: TechniqueEntry(
         19, "Surrogate Functions",
@@ -394,6 +419,11 @@ def get_applicable_techniques(app_name: str) -> Dict[int, TechniqueEntry]:
     applicable).
     
     """
+    # ``applicable_apps is None`` means "universally applicable".
+    # ``applicable_apps == []`` means "applicable to nothing", which is how
+    # categorically inapplicable operators (distributed-systems consistency,
+    # neural-network pruning, relational joins) are excluded from every
+    # benchmark in this suite. The two must not be conflated.
     return {
         tid: t for tid, t in TECHNIQUE_REGISTRY.items()
         if (t.applicable_apps is None or app_name in t.applicable_apps)

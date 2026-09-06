@@ -1,5 +1,6 @@
 import os
 import subprocess
+import re
 from langchain_core.prompts import (
     ChatPromptTemplate,
 )
@@ -26,6 +27,16 @@ from config.globals import (
 from config.config import APPROXIMATION_CONTEXT
 # Cat 1
 
+
+def _without_auto_generated_cards(text):
+    """Remove card-generated prompt blocks for a fixed experimental catalogue."""
+    return re.sub(
+        r"\n?# === AUTO-GENERATED START ===.*?# === AUTO-GENERATED END ===\n?",
+        "\n",
+        text,
+        flags=re.DOTALL,
+    )
+
 def loadGlobalContext(): #Cat 1
 
     global GLOBAL_CONTEXT
@@ -51,7 +62,7 @@ def loadGlobalContext(): #Cat 1
         ]
         GLOBAL_CONTEXT += summary_converstaion
 
-def getPromptTemplates():
+def getPromptTemplates(include_auto_generated_cards=True):
     # Making prompt templates
     prompts = {}
 
@@ -69,6 +80,13 @@ def getPromptTemplates():
 
     with open("prompts/approximate_vPDG1.txt", "r") as file:
         approximation_script = file.read()
+
+    if not include_auto_generated_cards:
+        planning_script = _without_auto_generated_cards(planning_script)
+        approximation_script = _without_auto_generated_cards(approximation_script)
+
+    with open("prompts/operator_selection.txt", "r") as file:
+        operator_selection_script = file.read()
 
     with open("prompts/error_handling.txt", "r") as file:
         error_script = file.read()
@@ -96,6 +114,11 @@ def getPromptTemplates():
             ("human", annotation_script),
         ]
     )
+
+    # Per-function operator selection is a plain template rather than a
+    # ChatPromptTemplate: it is formatted directly with .format(), matching
+    # findApplicableTechniquesForFunction's calling convention.
+    prompts['operatorSelectionPrompt'] = operator_selection_script
 
     prompts['planningPrompt'] = ChatPromptTemplate.from_messages(
         [
@@ -157,12 +180,79 @@ def loadLoopPerfExamples(): #Cat 1
     ai_message = "Got it. When applying loop perforation, I'll add to the code in a truncation style approximation to the condition step of the loop."
     LOOP_PERF_EXAMPLES.append(formatMessageForHistory(ai_message,True))
 
-def loadNewTechniqueExamples(): #Cat 1
-    with open("prompts/FewShotExamples/newTechniqueExamples.txt",'r') as file:
-        NEW_TECHNIQUE_EXAMPLES.append(formatMessageForHistory(file.read(),False))
-    
-    ai_message = "Got it. I now have examples of early-exit, spatial downsampling, temporal decimation, bit-shift EWMA, nibble lookup, radix variation, pattern segmentation, and lazy preprocessing approximation techniques. I will follow these patterns when applying these techniques."
-    NEW_TECHNIQUE_EXAMPLES.append(formatMessageForHistory(ai_message,True))
+#: ``### Example N: <name> (Technique <id>) ...`` section header.
+_EXAMPLE_HEADER = re.compile(
+    r"^### Example \d+:.*?\(Technique (\d+)\)", re.MULTILINE
+)
+
+
+def _split_examples_by_technique(text):
+    """Return ``(preamble, {technique_id: section_text})``."""
+    matches = list(_EXAMPLE_HEADER.finditer(text))
+    if not matches:
+        return text, {}
+    preamble = text[: matches[0].start()]
+    sections = {}
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        sections[int(match.group(1))] = text[match.start():end]
+    return preamble, sections
+
+
+def loadNewTechniqueExamples(include_auto_generated_cards=True, feasible_ids=None): #Cat 1
+    """Load the added-operator few-shot examples.
+
+    All ten examples used to be loaded for every application regardless of
+    which operators were feasible, costing roughly 10.6K characters of context
+    on every single model call. When ``feasible_ids`` is supplied, only the
+    examples for operators this run can actually select are included: a Sobel
+    run has no use for the nibble-lookup or link-estimator examples.
+    """
+    with open("prompts/FewShotExamples/newTechniqueExamples.txt", 'r') as file:
+        examples = file.read()
+
+    if not include_auto_generated_cards:
+        examples = re.sub(
+            r"\n?### === AUTO-GENERATED FEW-SHOT START ===.*?### === AUTO-GENERATED FEW-SHOT END ===\n?",
+            "\n",
+            examples,
+            flags=re.DOTALL,
+        )
+
+    included_ids = None
+    if feasible_ids:
+        preamble, sections = _split_examples_by_technique(examples)
+        if sections:
+            kept = {
+                tid: body for tid, body in sections.items() if tid in set(feasible_ids)
+            }
+            if kept:
+                included_ids = sorted(kept)
+                examples = preamble + "".join(kept[tid] for tid in included_ids)
+                removed = sorted(set(sections) - set(kept))
+                print(
+                    f"[context] Few-shot examples: kept T{included_ids} for this "
+                    f"target/app, dropped T{removed} "
+                    f"({len(examples)} chars instead of "
+                    f"{len(preamble) + sum(len(b) for b in sections.values())})"
+                )
+
+    NEW_TECHNIQUE_EXAMPLES.append(formatMessageForHistory(examples, False))
+
+    if included_ids:
+        listed = ", ".join(f"T{tid}" for tid in included_ids)
+        ai_message = (
+            f"Got it. I now have implementation examples for {listed}. "
+            "I will follow these patterns when applying those operators."
+        )
+    else:
+        ai_message = (
+            "Got it. I now have examples of early-exit, spatial downsampling, "
+            "temporal decimation, bit-shift EWMA, nibble lookup, radix variation, "
+            "pattern segmentation, and lazy preprocessing approximation "
+            "techniques. I will follow these patterns when applying these techniques."
+        )
+    NEW_TECHNIQUE_EXAMPLES.append(formatMessageForHistory(ai_message, True))
 
 def loadCodeBaseSummary(code_summary):
     with open("prompts/manufactured_code_base_summary.txt",'r') as file:

@@ -2,13 +2,34 @@
 
 Now, for the {function_name} function, approximate the code using the approximations highlited in previous prompt. The goal is to modify this function to reduce the number of clock cycles it uses. Focus on the identified areas of potential improvement and apply the described approximations. Additionally, for any of the Knob Variables identified or created, ensure they are declared at the top of the function within the `/*Knob Variables Declaration Start*/` and `/*Knob Variables Declaration End*/` comments. If knob variables a created, they must be initalize within the function, not as gloabl variables.
 
+Hard correctness contract:
+- Copy the original function signature exactly: return type, qualifiers (including `static`), function name, parameter types, parameter order, and parameter count. Never add, remove, or rename parameters.
+- Knobs are initialized local variables inside the function body only. Never use a knob as a function parameter. Put each tunable knob on its own declaration line in the knob-declaration block, for example `int shift_bits = 0;`.
+- Preserve every required return statement and use only identifiers, types, and helper functions that already exist in the application context.
+- Do not redeclare globals or other externally visible state that the original function updates.
+- Every approximation must have a safe reference setting inside its knob range. Use that setting as the local initializer (for example: factor/scale/stride = 1, enable flag or shift = 0, and iteration budget = its upper bound). At this setting the function must preserve the original behavior.
+- Return the entire compilable function body. Never use ellipses, pseudocode, or comments such as "the rest remains the same".
+
 Return the following:
+- Begin with `APPLIED_TECHNIQUES: T<number>, ...` and list every exact catalog ID used. At least one catalog ID is required; unlabelled transformations are rejected.
 - The approximated code.
 - A list of knob variables.
 - A list of ranges for each knob variable.
 - The step size by which to increment each knob variable; two options: Real or Integer.
 
-If you are applying loop perforation, consider **truncation and not reduced sampling** strategies. Truncation, such as `for (int i = 0; i < (1000 * 0.8); i++)`, reduces the total number of iterations by a fixed percentage and provides more flexibility for tuning. On the other hand, reduced sampling, such as `for (int i = 0; i < 1000; i += 2)`, skips a certain number of iterations (in this case, every other iteration).
+If you are applying loop perforation, consider **truncation and not reduced sampling** strategies. Truncation reduces the total number of iterations by a fixed proportion and provides more flexibility for tuning; reduced sampling, such as `for (int i = 0; i < 1000; i += 2)`, skips iterations instead.
+
+Express truncation with **integer arithmetic only**. Use an integer percentage knob:
+
+```c
+/*Knob Variables Declaration Start*/
+int iteration_pct = 100;   /* 100 = identity: run every iteration */
+/*Knob Variables Declaration End*/
+int limit = (1000 * iteration_pct) / 100;
+for (int i = 0; i < limit; i++) {{ ... }}
+```
+
+Do NOT write `for (int i = 0; i < (1000 * 0.8); i++)`. A floating-point literal in a loop bound introduces software-emulated floating-point arithmetic on a target with no FPU, which costs cycles rather than saving them, and it hard-codes the approximation level instead of exposing it as a tunable knob.
 
 # === AUTO-GENERATED START ===
 === Technique 31 (4-Bit Quantization) implementation rules ===

@@ -5,3 +5,4 @@ Compilation Error: {this_err}
 
 Please try again writing the code in a correct format. You may also choose to change tha approximation.
 
+Repair requirements: preserve the original function signature exactly and keep all knobs as initialized local variables in the function body. Do not add parameters, change return type, or reference undeclared identifiers. Return a complete replacement function, not a patch; include every statement of its body and never use placeholders or ellipses.

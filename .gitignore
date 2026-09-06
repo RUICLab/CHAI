@@ -14,6 +14,7 @@ fusedBin/cycles.dump
 fusedBin/combinations
 fusedBin/config.yaml
 fusedBin/fused
+fusedBin/trace_input.csv
 
 # Distribution / packaging
 .Python
@@ -177,4 +178,20 @@ logs/*.txt
 logs/*.json
 outputs/
 final_results/
+experiment_results/
 __pycache__/
+
+# ---------------------------------------------------------------------------
+# Transient run artifacts
+# ---------------------------------------------------------------------------
+# These directories are rebuilt from scratch by _prepare_fresh_run() on every
+# invocation. Committing them makes the provenance config_hash unstable and
+# lets one run's leftovers look like source.
+dependency_graphs/
+functions/
+compilation_testing/
+knob_tuning/
+approximated_functions/
+target/
+logs/
+results_archive/

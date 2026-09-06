@@ -18,6 +18,7 @@ from lib.technique_registry import (
     get_applicable_techniques,
     get_all_techniques,
 )
+from lib.hardware_cost_model import energy_budget_headroom
 from utils.utils import Dprint
 
 
@@ -49,6 +50,7 @@ def filter_feasible_techniques(
     candidates = get_applicable_techniques(app_name)
     feasible: Dict[int, TechniqueEntry] = {}
     rejection_log: List[str] = []
+    advisory_log: List[str] = []
 
     for tid, tech in candidates.items():
         rejected = False
@@ -77,6 +79,25 @@ def filter_feasible_techniques(
             )
             rejected = True
 
+        # --- Energy budget: ADVISORY ONLY ---
+        #
+        # ``energy_budget_mj`` is in millijoules; ``estimate_cost`` returns
+        # hand-assigned score units. Converting between them needs a calibration
+        # constant that has never been measured on the target, so this must not
+        # remove an operator: an uncalibrated constant silently deciding which
+        # operators an arm may use would be a confound, not a control. It is
+        # recorded as advisory metadata and used for ranking only. Promote it to
+        # a hard gate only after measuring per-operator overhead on the device.
+        if not rejected:
+            headroom = energy_budget_headroom(tech, hw)
+            if headroom is not None and headroom[0] > headroom[1]:
+                advisory_log.append(
+                    f"  T{tid:02d} {tech.name}: ADVISORY — overhead score "
+                    f"{headroom[0]} exceeds the uncalibrated energy screen "
+                    f"{headroom[1]:.4f} (from {hw.energy_budget_mj} mJ). "
+                    "Not rejected; ranking metadata only."
+                )
+
         if not rejected:
             feasible[tid] = tech
 
@@ -89,6 +110,11 @@ def filter_feasible_techniques(
     Dprint(f"[Gatekeeper] {n_total} total techniques → "
            f"{n_app} applicable to '{app_name}' → "
            f"{n_pass} feasible on {hw.name} ({n_rej} rejected)")
+
+    if advisory_log:
+        Dprint("[Gatekeeper] Advisory (not rejections):")
+        for line in advisory_log:
+            Dprint(line)
 
     return feasible, rejection_log
 

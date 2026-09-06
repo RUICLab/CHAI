@@ -6,6 +6,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 import shutil
 
+from utils import llm_accounting
+
 from config.config import(
     API_NAME,
 )
@@ -56,6 +58,10 @@ def queryGPT(chat, chat_history, files_list, error_message=""):
     _max_retries = 5
     for _attempt in range(1, _max_retries + 1):
         try:
+            llm_accounting.record(
+                "makefile_generation" if _attempt == 1
+                else "makefile_generation_retry"
+            )
             response = chain.invoke(
                 input={"conversation": list(chat_history), "next_prompt": query}
             )
@@ -109,6 +115,20 @@ def compileAndLog(target_path):
     """
     try:
         with open(os.path.join(target_path, "compiler_log.txt"), "w") as output_file:
+            # A compilation-test directory is copied from ``target`` and can
+            # therefore contain a binary/object produced by an earlier build.
+            # Without cleaning first, ``make main`` may report that stale
+            # artifact as up to date and never compile the newly patched C
+            # function.  Generation and BayesOpt must use the same clean-build
+            # gate or an invalid plan can pass generation and fail only later.
+            subprocess.run(
+                "make clean",
+                shell=True,
+                check=True,
+                cwd=target_path,
+                stdout=output_file,
+                stderr=subprocess.STDOUT,
+            )
             subprocess.run(
                 "make main",
                 shell=True,
@@ -135,6 +155,16 @@ def generateMakeFile(target_path):
     elif API_NAME == "Anthropic":
         api_key = os.getenv("ANTHROPIC_API_KEY")
         chat = ChatAnthropic(api_key=api_key,model=model)
+    elif API_NAME == "Ollama":
+        chat = ChatOpenAI(
+            api_key=os.getenv("OLLAMA_API_KEY", "ollama"),
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+            temperature=0,
+            model=model,
+            max_tokens=int(os.getenv("OLLAMA_MAX_TOKENS", "2048")),
+            max_retries=int(os.getenv("OLLAMA_MAX_RETRIES", "0")),
+            timeout=float(os.getenv("OLLAMA_TIMEOUT", "600")),
+        )
     elif API_NAME == "HuggingFace":
         # Re-use the global LLM from lib/llm.py to avoid loading model twice
         from lib.llm import llmLangChain
@@ -280,7 +310,10 @@ def compileTest(function):
     error_code = generateMakeFile(target_path=path2)
 
     if error_code == 1:
-        with open(os.path.join(path2,"compiler_log.txt"), "r") as file:
-            return file.read()
+        log_path = os.path.join(path2, "compiler_log.txt")
+        if os.path.exists(log_path):
+            with open(log_path, "r") as file:
+                return file.read()
+        return "Makefile generation failed before compilation; no compiler log was produced."
 
     return ""

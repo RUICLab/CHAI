@@ -66,9 +66,10 @@ def extract_technique_ids_from_json(json_path: str) -> Set[int]:
             data = json.load(f)
         if isinstance(data, list):
             for entry in data:
-                tn = entry.get("technique_number")
-                if tn is not None:
-                    ids.add(int(tn))
+                raw_ids = entry.get("technique_numbers", entry.get("technique_number", []))
+                if not isinstance(raw_ids, (list, tuple, set)):
+                    raw_ids = [raw_ids] if raw_ids is not None else []
+                ids.update(int(tn) for tn in raw_ids)
     except Exception:
         pass
     return ids
@@ -81,7 +82,23 @@ def extract_technique_ids_from_convo(convo: list) -> Set[int]:
     """
     ids: Set[int] = set()
     for role, text in convo:
-        ids |= extract_technique_ids_from_text(str(text))
+        # Human messages contain the allowed catalogue and repair history.
+        # Counting those IDs as model selections produces false provenance.
+        if str(role).lower() == "ai":
+            # Only the required provenance declaration counts. Explanations
+            # often echo the full allowed catalogue and must not become a
+            # false claim that every operator was applied.
+            declaration = re.search(
+                r"(?im)^\s*APPLIED_TECHNIQUES\s*:\s*([^\r\n]+)",
+                str(text),
+            )
+            if declaration:
+                ids |= {
+                    int(match.group(1))
+                    for match in re.finditer(
+                        r"\bT\s*(\d{1,3})\b", declaration.group(1), re.IGNORECASE
+                    )
+                }
     return ids
 
 
@@ -162,10 +179,14 @@ def clamp_apx_json(
     dropped: List[int] = []
     kept = []
     for entry in data:
-        tn = entry.get("technique_number")
-        if tn is not None and int(tn) not in feasible_ids:
-            dropped.append(int(tn))
-            Dprint(f"[HW Validator] Clamped infeasible technique {tn} "
+        raw_ids = entry.get("technique_numbers", entry.get("technique_number", []))
+        if not isinstance(raw_ids, (list, tuple, set)):
+            raw_ids = [raw_ids] if raw_ids is not None else []
+        entry_ids = {int(tn) for tn in raw_ids}
+        invalid = sorted(entry_ids - feasible_ids)
+        if invalid:
+            dropped.extend(invalid)
+            Dprint(f"[HW Validator] Clamped infeasible techniques {invalid} "
                    f"from apx_all.json")
         else:
             kept.append(entry)

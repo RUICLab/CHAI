@@ -32,7 +32,11 @@ from lib.constraint_gatekeeper import (
     format_rejection_report,
 )
 from lib.hardware_cost_model import rank_techniques, format_ranked_list
-from lib.hw_observability import write_rejection_json, write_constraints_txt
+from lib.hw_observability import (
+    write_approximation_plan_report,
+    write_rejection_json,
+    write_constraints_txt,
+)
 
 # -----------------------------------------------------------------------
 
@@ -88,6 +92,9 @@ for json_path, label in PROFILES:
     # Write observability outputs
     rej_path = write_rejection_json(APP, hw, feasible, rejection_log)
     con_path = write_constraints_txt(APP, hw, feasible, ranked)
+    audit_json, audit_md = write_approximation_plan_report(APP, hw, feasible)
+    print(f"  Audit JSON: {audit_json}")
+    print(f"  Audit Markdown: {audit_md}")
     print(f"  → {rej_path}")
     print(f"  → {con_path}")
 

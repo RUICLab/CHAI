@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 import json
@@ -36,11 +37,30 @@ def buildObjects(appName):
             shell=True,
             capture_output=True,
             text=True,
+            timeout=float(os.getenv("CHAI_TARGET_BUILD_TIMEOUT", "900")),
         )
         if result.returncode != 0:
-            Dprint(f"[buildObjects] Build FAILED (exit {result.returncode})")
-            Dprint(f"[buildObjects] stderr: {result.stderr[-500:] if result.stderr else '(empty)'}")
-            Dprint(f"[buildObjects] stdout: {result.stdout[-500:] if result.stdout else '(empty)'}")
+            # Surface cross-compiler failures instead of only tracing them.
+            # A swallowed failure left a stale hex in place and the campaign
+            # then measured the previous candidate's power cycles.
+            print(
+                f"[buildObjects] MSP430 build FAILED for {appName} "
+                f"(exit {result.returncode})"
+            )
+            Dprint(f"[buildObjects] stderr: {result.stderr[-2000:] if result.stderr else '(empty)'}")
+            Dprint(f"[buildObjects] stdout: {result.stdout[-2000:] if result.stdout else '(empty)'}")
+            overflow = re.search(
+                r"region\s+[`'\"]?(\w+)[`'\"]?\s+overflowed by (\d+) bytes",
+                f"{result.stdout}\n{result.stderr}",
+                re.IGNORECASE,
+            )
+            if overflow:
+                print(
+                    f"[buildObjects] region {overflow.group(1)} overflowed by "
+                    f"{overflow.group(2)} bytes — candidate does not fit the device"
+                )
+    except subprocess.TimeoutExpired:
+        Dprint(f"[buildObjects] MSP430 build for {appName} timed out")
     except subprocess.CalledProcessError as e:
         Dprint(f"An error occurred while building the objects: {e}")
 
@@ -96,12 +116,28 @@ def runFused(pathToHex: str):
     os.chdir("fusedBin")
 
     # run the fused simulator, wait for it to finish
-    result = subprocess.run(
-        "./fused",
-        shell=True,
-        capture_output=True,
-        text=True,
-    )
+    #
+    # Fused previously ran with no timeout. A simulator that hangs on a
+    # pathological candidate blocked the entire campaign indefinitely with no
+    # diagnostic, which is indistinguishable from a very slow trace.
+    timeout_seconds = float(os.getenv("CHAI_FUSED_TIMEOUT", "1800"))
+    try:
+        result = subprocess.run(
+            "./fused",
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired:
+        Dprint(
+            f"[runFused] Fused exceeded {timeout_seconds}s and was killed; "
+            "treating this candidate as a simulation failure"
+        )
+        os.chdir(cwd)
+        if os.path.exists(binaryName):
+            os.remove(binaryName)
+        return
     if result.returncode != 0:
         Dprint(f"[runFused] Fused exited with code {result.returncode}")
         if result.stderr:
