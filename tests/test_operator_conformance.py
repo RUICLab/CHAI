@@ -8,9 +8,14 @@ from utils.operator_conformance import (
 from lib.hardware_profile import HardwareProfile
 
 
+# The knob-declaration block is mandatory in the generation contract, and
+# normalize_knob_metadata depends on it downstream, so conformance requires it
+# too: an added operator with no declared, used knob cannot be substantiated.
 VALID_T27 = """
 int bitcount(unsigned long x) {
+  /*Knob Variables Declaration Start*/
   int nibble_stride = 1;
+  /*Knob Variables Declaration End*/
   static const char nibble_lut[16] = {0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4};
   int cnt = 0;
   for (int i = 0; i < 8; i += nibble_stride)
@@ -272,3 +277,22 @@ def test_sobel_t2_backend_is_not_used_without_chai_hardware_control():
 
     assert repair_operator_candidate(candidate, {2}, None) == []
     assert candidate["completeFunction"] == "void sobel_filtering(void) { return; }"
+
+
+def test_an_added_operator_without_a_declared_knob_is_rejected():
+    """An operator with nothing to tune cannot be substantiated.
+
+    The generation contract mandates the knob-declaration block, and the
+    optimizer needs it to build a search space, so its absence is a rejection
+    rather than a pass.
+    """
+    no_knob_block = """
+    int bitcount(unsigned long x) {
+      static const char nibble_lut[16] = {0,1,1,2,1,2,2,3,1,2,2,3,2,3,3,4};
+      int cnt = 0;
+      for (int i = 0; i < 8; i++) cnt += nibble_lut[(x >> (i * 4)) & 0xF];
+      return cnt;
+    }
+    """
+
+    assert validate_operator_conformance(no_knob_block, {27})

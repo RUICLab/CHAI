@@ -40,6 +40,10 @@ import os
 import statistics
 import sys
 
+# The analyser re-validates accepted plans with the project's own conformance
+# checker, so the repository root must be importable when run as a script.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 ARMS = [
     ("checkmate_baseline", "A  T1-T20, control off"),
     ("operator_only_plus10", "B  T1-T30, control off"),
@@ -59,6 +63,58 @@ def _load_json(path):
             return json.load(handle)
     except (OSError, json.JSONDecodeError):
         return None
+
+
+
+def _final_provenance(cell_dir):
+    """Re-check the accepted plan's operator claims with the current checker.
+
+    ``operator_conformance_violation_count`` counts candidate *attempts*,
+    including ones that were rejected, retried, or replaced. That is a useful
+    process measure but it is not "false provenance that was shipped": only the
+    accepted artifact is shipped. This re-validates that artifact.
+    """
+    outputs = os.path.join(cell_dir, "outputs")
+    accepted = sorted(glob.glob(
+        os.path.join(outputs, "accepted_approximation_plans_*.json")
+    ))
+    if not accepted:
+        return None
+    payload = _load_json(accepted[0])
+    if not payload:
+        return None
+    plans = payload.get("plans") if isinstance(payload, dict) else payload
+    if not isinstance(plans, list):
+        return None
+
+    try:
+        from utils.operator_conformance import nonconforming_added_operator_ids
+        from utils.operator_conformance import nonconforming_base_operator_ids
+    except Exception as import_error:  # pragma: no cover - environment issue
+        print(f"  [analyser] cannot re-validate provenance: {import_error}")
+        return None
+
+    functions_with_false_claims = 0
+    false_claims = 0
+    checked = 0
+    for entry in plans:
+        code = entry.get("completeFunction") or ""
+        declared = set(entry.get("technique_numbers") or [])
+        if not code or not declared:
+            continue
+        checked += 1
+        bad = (
+            nonconforming_added_operator_ids(code, declared)
+            | nonconforming_base_operator_ids(code, declared)
+        )
+        if bad:
+            functions_with_false_claims += 1
+            false_claims += len(bad)
+    return {
+        "functions_checked": checked,
+        "functions_with_false_claims": functions_with_false_claims,
+        "false_claims_in_final_plan": false_claims,
+    }
 
 
 def read_cell(cell_dir):
@@ -104,9 +160,10 @@ def read_cell(cell_dir):
     metrics = _load_json(metric_files[0]) or {}
 
     cell["api_calls"] = metrics.get("api_calls")
-    cell["conformance_violations"] = metrics.get(
+    cell["attempt_violations"] = metrics.get(
         "operator_conformance_violation_count", 0
     )
+    cell["final_provenance"] = _final_provenance(cell_dir)
     cell["conformance_enforced"] = metrics.get("operator_conformance_enforced")
     cell["functions_attempted"] = metrics.get("functions_attempted", 0)
     cell["functions_succeeded"] = metrics.get("functions_succeeded", 0)
@@ -333,8 +390,18 @@ def main():
                     (c["max_prompt_tokens"] for c in cells if c["max_prompt_tokens"]),
                     default=None,
                 ),
-                "operator_mislabels": sum(
-                    c.get("conformance_violations") or 0 for c in valid
+                "attempt_violations": sum(
+                    c.get("attempt_violations") or 0 for c in valid
+                ),
+                "final_false_claims": sum(
+                    ((c.get("final_provenance") or {}).get(
+                        "false_claims_in_final_plan") or 0)
+                    for c in valid
+                ),
+                "final_functions_checked": sum(
+                    ((c.get("final_provenance") or {}).get(
+                        "functions_checked") or 0)
+                    for c in valid
                 ),
                 "functions_attempted": sum(
                     c.get("functions_attempted") or 0 for c in valid
@@ -367,45 +434,41 @@ def main():
                           "target build")
 
     # ---- Operator provenance -----------------------------------------------
-    print("\n" + "=" * 86)
-    print("OPERATOR PROVENANCE  (declared operators vs. what the code implements)")
-    print("=" * 86)
-    print("  Measured in every arm. Where the control plane is ON a violation is")
-    print("  CAUGHT and sent back for repair; where it is OFF the same violation")
-    print("  is SHIPPED in the result and reported as fact. These are opposite")
-    print("  outcomes and must not be added together.")
-    print(f"\n  {'benchmark':<14} {'arm':<26} {'caught':>7} {'shipped':>8} "
-          f"{'funcs ok':>10}")
-    print("  " + "-" * 74)
-    total_shipped = 0
-    total_caught = 0
+    print("\n" + "=" * 92)
+    print("OPERATOR PROVENANCE")
+    print("=" * 92)
+    print("  Two different quantities. Do not add them.")
+    print()
+    print("  rejected / unenforced attempts: violations seen during generation.")
+    print("    Counts every candidate attempt, including ones later retried or")
+    print("    replaced, so it is a process measure, not a claim about results.")
+    print("  false claims in FINAL plan: the accepted artifact re-validated with")
+    print("    the current checker. This is what actually ships in a results")
+    print("    table. It is a LOWER BOUND: a static checker cannot prove a")
+    print("    transformation is genuinely implemented.")
+    print(f"\n  {'benchmark':<14} {'arm':<26} {'attempts':>9} {'FINAL false':>12} "
+          f"{'of funcs':>9} {'funcs ok':>10}")
+    print("  " + "-" * 88)
+    total_final = 0
     for app in sorted(data):
         for arm, label in ARMS:
-            summary_row = report["apps"].get(app, {}).get(arm)
-            if not summary_row:
+            row = report["apps"].get(app, {}).get(arm)
+            if not row:
                 continue
             cells = [c for c in data[app].get(arm, {}).values() if c["valid"]]
             enforced = any(c.get("conformance_enforced") for c in cells)
-            violations = summary_row["operator_mislabels"]
-            caught = violations if enforced else 0
-            shipped = 0 if enforced else violations
-            total_caught += caught
-            total_shipped += shipped
-            summary_row["violations_caught"] = caught
-            summary_row["false_provenance_shipped"] = shipped
-            print(f"  {app:<14} {label:<26} {caught:>7} {shipped:>8} "
-                  f"{summary_row['functions_succeeded']}/"
-                  f"{summary_row['functions_attempted']:<8}")
-    print("  " + "-" * 74)
-    print(f"  {'TOTAL':<41} {total_caught:>7} {total_shipped:>8}")
-    report["provenance"] = {
-        "violations_caught_by_control_plane": total_caught,
-        "false_provenance_shipped_unenforced": total_shipped,
-    }
+            marker = "rej" if enforced else "unenf"
+            total_final += row["final_false_claims"]
+            print(f"  {app:<14} {label:<26} "
+                  f"{row['attempt_violations']:>4} {marker:<5}"
+                  f"{row['final_false_claims']:>12}"
+                  f"{row['final_functions_checked']:>9} "
+                  f"{row['functions_succeeded']}/"
+                  f"{row['functions_attempted']:<8}")
+    report["provenance"] = {"false_claims_in_final_plans": total_final}
     print()
-    print("  'shipped' is the quantity that ends up in a results table as though")
-    print("  it were true. It is the control plane's value stated independently")
-    print("  of the objective.")
+    print("  A false claim in an ENFORCED arm is a checker gap, not a design")
+    print("  choice: the control plane was supposed to catch it and did not.")
 
     # ---- 2x2 effects on paired seeds --------------------------------------
     print("\n" + "=" * 86)
@@ -480,18 +543,24 @@ def main():
     print()
     if ct_mean is None or op_mean is None:
         print("  Not enough paired data to state a conclusion.")
+    elif ct_mean >= 0:
+        # Negative is improvement. A control effect at or above zero is not an
+        # improvement at all, and must never be reported as the larger one.
+        print("  The control plane did NOT improve the objective "
+              f"(effect {ct_mean:+.4f}; negative would be an improvement).")
+        print("  No claim about the control plane is supported by these data,")
+        print("  regardless of how the operator catalogue performed.")
     elif ct_mean < op_mean:
-        print("  The control plane shows the larger improvement. The claim that the")
-        print("  result is not merely the ten added operators is SUPPORTED by these")
+        print("  The control plane improved the objective and did so by more than")
+        print("  the operator catalogue. The claim that the result is not merely")
+        print("  the ten added operators is SUPPORTED by these point estimates.")
         if ct_half is not None and abs(ct_mean) < ct_half:
-            print("  point estimates, but the control effect's CI spans zero — the")
-            print("  effect is not distinguishable from noise at this seed count.")
-        else:
-            print("  data.")
+            print("  CAVEAT: the control effect's interval spans zero — not")
+            print("  distinguishable from noise at this seed count.")
     else:
-        print("  The operator catalogue shows an improvement at least as large as the")
-        print("  control plane. These data do NOT support the claim that the control")
-        print("  plane is what carries the result.")
+        print("  The control plane improved the objective, but the operator")
+        print("  catalogue improved it at least as much. These data do NOT support")
+        print("  the claim that the control plane is what carries the result.")
 
     if report["warnings"]:
         print("\n" + "=" * 86)

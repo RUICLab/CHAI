@@ -1,3 +1,4 @@
+import os
 import pytest
 
 from utils.knob_metadata import (
@@ -140,3 +141,28 @@ def test_source_recovery_allows_comments_between_signature_and_body(tmp_path):
     assert [entry["functionName"] for entry in recovered] == ["sobel_filtering"]
     assert recovered[0]["completeFunction"].startswith("void sobel_filtering")
 
+
+
+def test_a_declined_function_still_counts_as_attempted():
+    """Denominators must be comparable across arms.
+
+    CHAI's per-function selector legitimately declines a function with no
+    applicable operator, but budget was still spent on it. Counting it only in
+    the arms that reach planning reported CHAI "4/8" against the baseline's
+    "8/9" for the same frozen target list -- not comparable quantities.
+    """
+    source = open(
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "main.py"),
+        encoding="utf-8",
+    ).read()
+
+    increment = "exp_functions_attempted += 1"
+    assert source.count(increment) == 1, "exactly one place may count attempts"
+
+    before_decline = source.index(increment)
+    decline_branch = source.index("no applicable operator; ")
+    assert before_decline < decline_branch, (
+        "attempts must be counted before the per-function selector can skip a "
+        "function, or arms report different denominators"
+    )

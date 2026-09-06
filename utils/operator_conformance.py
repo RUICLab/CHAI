@@ -198,6 +198,71 @@ def nonconforming_base_operator_ids(code, technique_ids):
     return invalid
 
 
+
+def _declared_knobs_used_in_body(code):
+    """Return knobs that are declared and actually read in the function body.
+
+    A knob that is declared and never used is decoration. The AR ``sqrt16``
+    artifact declared ``max_iterations``, computed ``limit`` from it, and then
+    ignored both -- yet was accepted as T21 because the function contained an
+    ordinary ``return``.
+    """
+    knobs = _knob_names(code)
+    if not knobs:
+        return set()
+    body = _strip_comments(code)
+    marker = re.search(
+        r"/\*\s*Knob Variables Declaration End\s*\*/", code, re.IGNORECASE
+    )
+    if marker:
+        body = _strip_comments(code[marker.end():])
+    return {
+        knob for knob in knobs
+        if len(re.findall(rf"\b{re.escape(knob)}\b", body)) > 0
+    }
+
+
+_CONDITION = re.compile(
+    r"\b(?:if|while)\s*\(([^{;]*)\)|\bfor\s*\([^;]*;([^;]*);", re.DOTALL
+)
+
+
+def _knob_controlled_conditions(code):
+    """Return the conditions whose expression depends on a knob."""
+    tainted = _knob_tainted_names(code)
+    if not tainted:
+        return []
+    body = _strip_comments(code)
+    found = []
+    for match in _CONDITION.finditer(body):
+        expression = match.group(1) or match.group(2) or ""
+        if any(
+            re.search(rf"\b{re.escape(name)}\b", expression) for name in tainted
+        ):
+            found.append((match.start(), expression))
+    return found
+
+
+def _knob_guarded_exit(code):
+    """True when a break/return is reachable only through a knob-controlled test.
+
+    Requiring merely "the function contains a return" accepted every function
+    ever written. The exit must be governed by the knob, which is the whole
+    content of an early-exit operator.
+    """
+    conditions = _knob_controlled_conditions(code)
+    if not conditions:
+        return False
+    body = _strip_comments(code)
+    for position, _expression in conditions:
+        # The guarded statement follows its condition; a short window keeps
+        # this local without needing a full parser.
+        window = body[position:position + 400]
+        if re.search(r"\b(?:break|return|goto)\b", window):
+            return True
+    return False
+
+
 def nonconforming_added_operator_ids(code, technique_ids):
     """Return added-operator IDs whose distinctive structure is absent.
 
@@ -207,28 +272,39 @@ def nonconforming_added_operator_ids(code, technique_ids):
     rejected.
     """
     invalid = set()
+    used_knobs = _declared_knobs_used_in_body(code)
     for technique_id in sorted(set(technique_ids) & set(range(21, 31))):
+        # Common precondition for every added operator: at least one declared
+        # knob must actually be read by the function. Without this a candidate
+        # can declare a knob, never use it, and still claim the operator.
+        if not used_knobs:
+            invalid.add(technique_id)
+            continue
         if technique_id == 21:
-            ok = _has(code, r"\b(?:break|return)\b") and _has(
-                code, r"\b(?:threshold|max_iterations|iteration_budget|early_exit)\w*\b"
+            ok = _knob_guarded_exit(code)
+            requirement = (
+                "a break/return that is reached only through a condition "
+                "controlled by a declared knob. Declaring an iteration budget "
+                "and leaving the loop condition unchanged is not an early exit"
             )
-            requirement = "an early break/return controlled by a threshold or iteration-budget knob"
         elif technique_id == 22:
-            ok = _has(code, r"\b(?:downsample|spatial|pixel_stride)\w*\b") and _has(
-                code, r"\b(?:fill|interpolat|nearest|hold)\w*\b"
+            ok = (
+                _knob_controlled(code, r"\b(?:for|while)\s*\(|\+=|\[")
+                and _has(code, r"\b(?:fill|interpolat|nearest|hold)\w*\b")
             )
             requirement = "a spatial stride/downsample knob plus explicit skipped-output filling"
         elif technique_id == 23:
-            ok = _has(code, r"\b(?:decimation|sample_stride|temporal_stride)\w*\b") and _has(
-                code, r"\b(?:reconstruct|interpolat|zero_order|hold)\w*\b"
+            ok = (
+                _knob_controlled(code, r"\b(?:for|while)\s*\(|\+=|\[")
+                and _has(code, r"\b(?:reconstruct|interpolat|zero_order|hold)\w*\b")
             )
             requirement = "a temporal decimation/stride knob plus reconstruction"
         elif technique_id == 24:
             ok = _has(code, r"\b(?:cabs|hypot|magnitude)\w*\s*\(")
             requirement = "magnitude extraction (for example cabs/hypot) from FFT values"
         elif technique_id == 25:
-            ok = _has(code, r"\b(?:lazy|cache|preprocess_budget)\w*\b") and _has(
-                code, r"\bif\s*\("
+            ok = bool(_knob_controlled_conditions(code)) and _has(
+                code, r"\b(?:lazy|cache|preprocess_budget)\w*\b"
             )
             requirement = "a lazy/cache/budget knob guarding deferred preprocessing"
         elif technique_id == 26:
@@ -251,7 +327,7 @@ def nonconforming_added_operator_ids(code, technique_ids):
                 "and a nibble_stride knob"
             )
         elif technique_id == 28:
-            ok = _has(code, r"\b(?:tier|gate|hfe_)\w*\b") and _has(
+            ok = bool(_knob_controlled_conditions(code)) and _has(
                 code, r"\b(?:fft|spectral|feature)\w*\b"
             )
             requirement = "tier/gate logic controlling expensive spectral features"
@@ -261,8 +337,9 @@ def nonconforming_added_operator_ids(code, technique_ids):
             )
             requirement = "a radix_mode knob with power-of-two shift/mask conversion"
         else:  # T30
-            ok = _has(code, r"\b(?:segment_len|change_threshold|segment_)\w*\b") and _has(
-                code, r"\b(?:fill|hold|interpolat|representative|anchor)\w*\b"
+            ok = (
+                _knob_controlled(code, r"\[|\+=|\bfor\s*\(")
+                and _has(code, r"\b(?:fill|hold|interpolat|representative|anchor)\w*\b")
             )
             requirement = "segment/change knobs plus representative-value filling"
 
