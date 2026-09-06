@@ -81,7 +81,10 @@ def test_declining_is_a_valid_answer():
 
     assert plan.declined
     assert errors == []
-    assert check_implementation_matches_plan(plan, {1}) == ""
+    error, ids, actions = check_implementation_matches_plan(plan, {1})
+    assert error == ""
+    assert ids == {1}
+    assert actions == []
 
 
 def test_plan_outside_the_function_operator_contract_is_rejected():
@@ -92,15 +95,42 @@ def test_plan_outside_the_function_operator_contract_is_rejected():
     assert problems and "T1, T2" in problems[0]
 
 
-def test_generated_code_must_implement_exactly_the_approved_plan():
+def test_code_implementing_the_plan_exactly_is_accepted():
     """The link that did not previously exist between plan and code."""
     plan, _errors = parse_plan(WELL_FORMED)
 
-    assert check_implementation_matches_plan(plan, {1, 2}) == ""
+    error, ids, actions = check_implementation_matches_plan(plan, {1, 2})
+    assert error == ""
+    assert ids == {1, 2}
+    assert actions == []
 
-    dropped = check_implementation_matches_plan(plan, {1})
-    assert "did not implement planned operator(s) T2" in dropped
 
-    added = check_implementation_matches_plan(plan, {1, 2, 7})
-    assert "implemented operator(s) T7" in added
-    assert "not in the approved plan" in added
+def test_an_unplanned_operator_is_rejected():
+    """Adding an operator after approval bypasses its REGION and INVARIANT."""
+    plan, _errors = parse_plan(WELL_FORMED)
+
+    error, _ids, _actions = check_implementation_matches_plan(plan, {1, 2, 7})
+    assert "T7" in error
+    assert "not in the approved plan" in error
+
+
+def test_a_dropped_operator_narrows_provenance_instead_of_rejecting():
+    """A subset of the plan is honest once the declared provenance is corrected.
+
+    Rejecting these threw away otherwise valid candidates for being less
+    ambitious than planned, which cost every CHAI cell in the fft campaign.
+    """
+    plan, _errors = parse_plan(WELL_FORMED)
+
+    error, ids, actions = check_implementation_matches_plan(plan, {1})
+    assert error == ""
+    assert ids == {1}, "provenance must narrow to what the code contains"
+    assert actions and "T2" in actions[0]
+
+
+def test_implementing_none_of_the_plan_is_still_rejected():
+    """Nothing planned was implemented, so there is no provenance to record."""
+    plan, _errors = parse_plan(WELL_FORMED)
+
+    error, _ids, _actions = check_implementation_matches_plan(plan, set())
+    assert "none of the planned operators" in error

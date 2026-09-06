@@ -1214,9 +1214,18 @@ if not alreadyRun:
                 and approved_plan is not None
                 and approved_plan.records
             ):
-                plan_mismatch = check_implementation_matches_plan(
-                    approved_plan, current_technique_ids
+                plan_mismatch, corrected_ids, plan_actions = (
+                    check_implementation_matches_plan(
+                        approved_plan, current_technique_ids
+                    )
                 )
+                if not plan_mismatch and plan_actions:
+                    # The candidate implemented a subset of the plan. Record
+                    # what it actually contains rather than discarding it.
+                    current_technique_ids = corrected_ids
+                    record_generation_repair(
+                        this_function, generation_attempt, plan_actions
+                    )
                 if plan_mismatch:
                     selection_retries += 1
                     record_generation_rejection(
@@ -1429,9 +1438,15 @@ if not alreadyRun:
                 final_ids = set(
                     approximate_function.get("technique_numbers", [])
                 ) or set(current_technique_ids)
-                post_repair_mismatch = check_implementation_matches_plan(
-                    approved_plan, final_ids
+                post_repair_mismatch, corrected_final, post_actions = (
+                    check_implementation_matches_plan(approved_plan, final_ids)
                 )
+                if not post_repair_mismatch and post_actions:
+                    current_technique_ids = corrected_final
+                    approximate_function["technique_numbers"] = sorted(corrected_final)
+                    record_generation_repair(
+                        this_function, generation_attempt, post_actions
+                    )
                 if post_repair_mismatch:
                     selection_retries += 1
                     exp_plan_mismatches += 1

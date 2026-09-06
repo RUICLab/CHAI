@@ -466,41 +466,64 @@ def validate_plan_against_catalogue(plan, allowed_ids):
 
 
 def check_implementation_matches_plan(plan, implemented_ids):
-    """Return an actionable error when generated code departs from the plan.
+    """Return ``(error, corrected_ids, actions)`` for a generated candidate.
 
-    This is the link that did not previously exist. Operator provenance was
+    This is the link that did not previously exist: operator provenance was
     read out of the generation response alone, so the coder could add or drop
     operators after the plan was approved and nothing noticed.
+
+    The two directions are not the same offence and must not be punished alike:
+
+    * **Added** operators -- implemented but never planned -- are a real
+      provenance violation. The plan was approved on the strength of a stated
+      region, precondition and invariant that the added operator never had.
+      These are rejected.
+    * **Dropped** operators -- planned but not implemented -- do not
+      misrepresent anything as long as the *declared* provenance is corrected
+      to what the code actually contains. Rejecting these threw away otherwise
+      valid candidates for being less ambitious than planned, which cost every
+      CHAI cell in the fft smoke campaign. They are narrowed and recorded.
+
+    A candidate implementing none of the planned operators is still rejected:
+    there is nothing left to attribute.
     """
     if plan.declined or not plan.records:
-        return ""
+        return "", set(implemented_ids), []
 
     planned = plan.operator_ids
     implemented = set(implemented_ids)
 
     added = sorted(implemented - planned)
     dropped = sorted(planned - implemented)
+    kept = implemented & planned
 
-    problems = []
     if added:
-        problems.append(
-            "implemented operator(s) "
+        expected = ", ".join(f"T{tid}" for tid in sorted(planned))
+        return (
+            "Generated code implements operator(s) "
             + ", ".join(f"T{tid}" for tid in added)
-            + " that were not in the approved plan"
+            + " that were not in the approved plan. Every operator must be "
+            "planned first with its own REGION, PRECONDITION and INVARIANT. "
+            f"Implement exactly the planned operators ({expected}), or return a "
+            "new plan that includes what you intend to add.",
+            implemented,
+            [],
         )
+
+    if not kept:
+        expected = ", ".join(f"T{tid}" for tid in sorted(planned))
+        return (
+            f"Generated code implements none of the planned operators "
+            f"({expected}). There is no operator provenance to record.",
+            implemented,
+            [],
+        )
+
+    actions = []
     if dropped:
-        problems.append(
-            "did not implement planned operator(s) "
+        actions.append(
+            "narrowed declared provenance to the operators actually "
+            "implemented; planned but absent: "
             + ", ".join(f"T{tid}" for tid in dropped)
         )
-
-    if not problems:
-        return ""
-
-    expected = ", ".join(f"T{tid}" for tid in sorted(planned))
-    return (
-        "Generated code does not match the approved plan: "
-        + "; ".join(problems)
-        + f". Implement exactly the planned operators ({expected}), or explain "
-        "in a new plan why the plan must change."
-    )
+    return "", kept, actions
