@@ -990,6 +990,9 @@ if not alreadyRun:
             operator-only baseline.
         """
         this_tech_select_convo = []
+        # Counted here, before any arm-specific branch, so every arm reports the
+        # same denominator for the same frozen target list.
+        exp_functions_attempted += 1
         if hw_feasible is not None and args.per_function_operators:
             exp_api_calls += 1
             this_tech_select_convo, function_operator_ids = (
@@ -1036,10 +1039,6 @@ if not alreadyRun:
         this_plan_anno_convo = None
         function_code_annotated = ""
         approved_plan = None
-        # Attempted means "we spent budget on it", which starts here. Counting
-        # it inside the generation loop reported 0/0 for a function skipped at
-        # the plan contract, hiding the failure from the metrics entirely.
-        exp_functions_attempted += 1
 
         # The constraint text handed to planning and generation must describe
         # the operators actually allowed for THIS function. Previously it was

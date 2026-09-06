@@ -370,10 +370,15 @@ def main():
     print("\n" + "=" * 86)
     print("OPERATOR PROVENANCE  (declared operators vs. what the code implements)")
     print("=" * 86)
-    print("  Measured in every arm; ENFORCED only where the control plane is on.")
-    print(f"\n  {'benchmark':<18} {'arm':<26} {'enforced':>9} {'mislabels':>10} "
+    print("  Measured in every arm. Where the control plane is ON a violation is")
+    print("  CAUGHT and sent back for repair; where it is OFF the same violation")
+    print("  is SHIPPED in the result and reported as fact. These are opposite")
+    print("  outcomes and must not be added together.")
+    print(f"\n  {'benchmark':<14} {'arm':<26} {'caught':>7} {'shipped':>8} "
           f"{'funcs ok':>10}")
-    print("  " + "-" * 78)
+    print("  " + "-" * 74)
+    total_shipped = 0
+    total_caught = 0
     for app in sorted(data):
         for arm, label in ARMS:
             summary_row = report["apps"].get(app, {}).get(arm)
@@ -381,13 +386,26 @@ def main():
                 continue
             cells = [c for c in data[app].get(arm, {}).values() if c["valid"]]
             enforced = any(c.get("conformance_enforced") for c in cells)
-            print(f"  {app:<18} {label:<26} {str(bool(enforced)):>9} "
-                  f"{summary_row['operator_mislabels']:>10} "
+            violations = summary_row["operator_mislabels"]
+            caught = violations if enforced else 0
+            shipped = 0 if enforced else violations
+            total_caught += caught
+            total_shipped += shipped
+            summary_row["violations_caught"] = caught
+            summary_row["false_provenance_shipped"] = shipped
+            print(f"  {app:<14} {label:<26} {caught:>7} {shipped:>8} "
                   f"{summary_row['functions_succeeded']}/"
                   f"{summary_row['functions_attempted']:<8}")
-    print("\n  A high unenforced mislabel count is evidence FOR the control plane:")
-    print("  it is the amount of false operator provenance the baseline emits and")
-    print("  reports as fact.")
+    print("  " + "-" * 74)
+    print(f"  {'TOTAL':<41} {total_caught:>7} {total_shipped:>8}")
+    report["provenance"] = {
+        "violations_caught_by_control_plane": total_caught,
+        "false_provenance_shipped_unenforced": total_shipped,
+    }
+    print()
+    print("  'shipped' is the quantity that ends up in a results table as though")
+    print("  it were true. It is the control plane's value stated independently")
+    print("  of the objective.")
 
     # ---- 2x2 effects on paired seeds --------------------------------------
     print("\n" + "=" * 86)
