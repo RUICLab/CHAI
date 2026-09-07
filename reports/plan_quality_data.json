@@ -1,0 +1,423 @@
+{
+  "run_dir": "experiment_results/planquality_20260906_164509",
+  "hardware": "MSP430",
+  "apps": {
+    "ar-iclib": {
+      "checkmate_baseline": {
+        "repeats": 3,
+        "plans": [
+          8,
+          7,
+          8
+        ],
+        "hardware_infeasible": [
+          0,
+          0,
+          0
+        ],
+        "false_claims": [
+          3,
+          4,
+          3
+        ],
+        "distinct_menus": [
+          1,
+          1,
+          1
+        ],
+        "detail": [
+          {
+            "hardware_infeasible": [],
+            "false_claims": [
+              [
+                "featurize",
+                7
+              ],
+              [
+                "ACCEL_singleSample",
+                2
+              ],
+              [
+                "warmup_sensor",
+                4
+              ]
+            ]
+          },
+          {
+            "hardware_infeasible": [],
+            "false_claims": [
+              [
+                "featurize",
+                7
+              ],
+              [
+                "ACCEL_singleSample",
+                2
+              ],
+              [
+                "classify",
+                7
+              ],
+              [
+                "warmup_sensor",
+                4
+              ]
+            ]
+          },
+          {
+            "hardware_infeasible": [],
+            "false_claims": [
+              [
+                "featurize",
+                7
+              ],
+              [
+                "ACCEL_singleSample",
+                2
+              ],
+              [
+                "warmup_sensor",
+                4
+              ]
+            ]
+          }
+        ]
+      },
+      "operator_only_plus10": {
+        "repeats": 3,
+        "plans": [
+          7,
+          6,
+          6
+        ],
+        "hardware_infeasible": [
+          0,
+          0,
+          0
+        ],
+        "false_claims": [
+          4,
+          3,
+          2
+        ],
+        "distinct_menus": [
+          1,
+          1,
+          1
+        ],
+        "detail": [
+          {
+            "hardware_infeasible": [],
+            "false_claims": [
+              [
+                "ACCEL_singleSample",
+                1
+              ],
+              [
+                "recognize",
+                1
+              ],
+              [
+                "warmup_sensor",
+                4
+              ],
+              [
+                "sqrt16",
+                1
+              ]
+            ]
+          },
+          {
+            "hardware_infeasible": [],
+            "false_claims": [
+              [
+                "ACCEL_singleSample",
+                1
+              ],
+              [
+                "classify",
+                7
+              ],
+              [
+                "warmup_sensor",
+                4
+              ]
+            ]
+          },
+          {
+            "hardware_infeasible": [],
+            "false_claims": [
+              [
+                "ACCEL_singleSample",
+                1
+              ],
+              [
+                "warmup_sensor",
+                4
+              ]
+            ]
+          }
+        ]
+      },
+      "chai_plus10": {
+        "repeats": 3,
+        "plans": [
+          5,
+          4,
+          4
+        ],
+        "hardware_infeasible": [
+          0,
+          0,
+          0
+        ],
+        "false_claims": [
+          0,
+          0,
+          0
+        ],
+        "distinct_menus": [
+          7,
+          7,
+          7
+        ],
+        "detail": [
+          {
+            "hardware_infeasible": [],
+            "false_claims": []
+          },
+          {
+            "hardware_infeasible": [],
+            "false_claims": []
+          },
+          {
+            "hardware_infeasible": [],
+            "false_claims": []
+          }
+        ]
+      },
+      "chai_baseline_ops": {
+        "repeats": 3,
+        "plans": [
+          4,
+          5,
+          3
+        ],
+        "hardware_infeasible": [
+          0,
+          0,
+          0
+        ],
+        "false_claims": [
+          0,
+          0,
+          0
+        ],
+        "distinct_menus": [
+          7,
+          7,
+          7
+        ],
+        "detail": [
+          {
+            "hardware_infeasible": [],
+            "false_claims": []
+          },
+          {
+            "hardware_infeasible": [],
+            "false_claims": []
+          },
+          {
+            "hardware_infeasible": [],
+            "false_claims": []
+          }
+        ]
+      }
+    },
+    "bc-iclib": {
+      "checkmate_baseline": {
+        "repeats": 1,
+        "plans": [
+          1
+        ],
+        "hardware_infeasible": [
+          0
+        ],
+        "false_claims": [
+          1
+        ],
+        "distinct_menus": [
+          1
+        ],
+        "detail": [
+          {
+            "hardware_infeasible": [],
+            "false_claims": [
+              [
+                "btbl_bitcnt",
+                2
+              ]
+            ]
+          }
+        ]
+      },
+      "operator_only_plus10": {
+        "repeats": 0
+      },
+      "chai_plus10": {
+        "repeats": 0
+      },
+      "chai_baseline_ops": {
+        "repeats": 0
+      }
+    },
+    "fft-iclib": {
+      "checkmate_baseline": {
+        "repeats": 2,
+        "plans": [
+          1,
+          1
+        ],
+        "hardware_infeasible": [
+          0,
+          0
+        ],
+        "false_claims": [
+          1,
+          1
+        ],
+        "distinct_menus": [
+          1,
+          1
+        ],
+        "detail": [
+          {
+            "hardware_infeasible": [],
+            "false_claims": [
+              [
+                "fft_radix2",
+                2
+              ]
+            ]
+          },
+          {
+            "hardware_infeasible": [],
+            "false_claims": [
+              [
+                "fft_radix2",
+                2
+              ]
+            ]
+          }
+        ]
+      },
+      "operator_only_plus10": {
+        "repeats": 1,
+        "plans": [
+          1
+        ],
+        "hardware_infeasible": [
+          1
+        ],
+        "false_claims": [
+          1
+        ],
+        "distinct_menus": [
+          1
+        ],
+        "detail": [
+          {
+            "hardware_infeasible": [
+              [
+                "fft_radix2",
+                24,
+                "Magnitude-Only FFT",
+                "needs FPU"
+              ]
+            ],
+            "false_claims": [
+              [
+                "fft_radix2",
+                24
+              ]
+            ]
+          }
+        ]
+      },
+      "chai_plus10": {
+        "repeats": 0
+      },
+      "chai_baseline_ops": {
+        "repeats": 0
+      }
+    },
+    "lqi-iclib": {
+      "checkmate_baseline": {
+        "repeats": 0
+      },
+      "operator_only_plus10": {
+        "repeats": 0
+      },
+      "chai_plus10": {
+        "repeats": 0
+      },
+      "chai_baseline_ops": {
+        "repeats": 0
+      }
+    },
+    "sobel-iclib": {
+      "checkmate_baseline": {
+        "repeats": 0
+      },
+      "operator_only_plus10": {
+        "repeats": 0
+      },
+      "chai_plus10": {
+        "repeats": 0
+      },
+      "chai_baseline_ops": {
+        "repeats": 0
+      }
+    },
+    "stringsearch-iclib": {
+      "checkmate_baseline": {
+        "repeats": 0
+      },
+      "operator_only_plus10": {
+        "repeats": 0
+      },
+      "chai_plus10": {
+        "repeats": 0
+      },
+      "chai_baseline_ops": {
+        "repeats": 0
+      }
+    }
+  },
+  "pooled": {
+    "checkmate_baseline": {
+      "infeasible": 0,
+      "false": 13,
+      "plans": 26,
+      "cells": 6
+    },
+    "operator_only_plus10": {
+      "infeasible": 1,
+      "false": 10,
+      "plans": 20,
+      "cells": 4
+    },
+    "chai_plus10": {
+      "infeasible": 0,
+      "false": 0,
+      "plans": 13,
+      "cells": 3
+    },
+    "chai_baseline_ops": {
+      "infeasible": 0,
+      "false": 0,
+      "plans": 12,
+      "cells": 3
+    }
+  }
+}

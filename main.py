@@ -1239,6 +1239,9 @@ if not alreadyRun:
                     "APPLIED_TECHNIQUES: T<number>, ... using at least one "
                     "exact ID from the supplied catalogue."
                 )
+                exp_candidate_rejections["missing_provenance"] = (
+                    exp_candidate_rejections.get("missing_provenance", 0) + 1
+                )
                 record_generation_rejection(
                     this_function,
                     generation_attempt,
@@ -1325,6 +1328,9 @@ if not alreadyRun:
                 valid, invalid = validate_technique_ids(chosen, selection_feasible)
                 if invalid:
                     selection_retries += 1
+                    exp_candidate_rejections["infeasible_operator_id"] = (
+                        exp_candidate_rejections.get("infeasible_operator_id", 0) + 1
+                    )
                     Dprint(f"[HW Validator] Infeasible IDs in LLM output: {invalid}")
                     print(Fore.RED + f"  [HW Validator] LLM chose infeasible technique(s): "
                           f"{sorted(invalid)} — reprompting once..." + Style.RESET_ALL)

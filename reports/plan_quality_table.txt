@@ -1,0 +1,78 @@
+========================================================================================================
+PLAN QUALITY  —  target MSP430 — 10.0 KB RAM, 16.0 MHz, no-FPU, no-SIMD, 5.0 mJ budget
+========================================================================================================
+  Properties of the plan itself, re-derived from each run's accepted
+  artifact. Repeated cells show  median [min-max]  across repeats.
+
+ar-iclib
+  arm                                      reps      plans   HW-infeas   false prov   menus
+  --------------------------------------------------------------------------------------------
+  A  CheckMate T1-T20, no control plane       3    8 [7-8]           0      3 [3-4]       1
+  B  CheckMate+10 T1-T30, no control plane    3    6 [6-7]           0      3 [2-4]       1
+  C  CHAI T1-T30, control plane ON            3    4 [4-5]           0            0       7
+  D  CHAI T1-T20, control plane ON            3    4 [3-5]           0            0       7
+
+bc-iclib
+  arm                                      reps      plans   HW-infeas   false prov   menus
+  --------------------------------------------------------------------------------------------
+  A  CheckMate T1-T20, no control plane       1          1           0            1       1
+  B  CheckMate+10 T1-T30, no control plane    3 no accepted plan
+  C  CHAI T1-T30, control plane ON            3 no accepted plan
+  D  CHAI T1-T20, control plane ON            3 no accepted plan
+
+fft-iclib
+  arm                                      reps      plans   HW-infeas   false prov   menus
+  --------------------------------------------------------------------------------------------
+  A  CheckMate T1-T20, no control plane       2          1           0            1       1
+  B  CheckMate+10 T1-T30, no control plane    1          1           1            1       1
+  C  CHAI T1-T30, control plane ON            3 no accepted plan
+  D  CHAI T1-T20, control plane ON            3 no accepted plan
+      B  fft_radix2: T24 Magnitude-Only FFT — needs FPU
+
+lqi-iclib
+  arm                                      reps      plans   HW-infeas   false prov   menus
+  --------------------------------------------------------------------------------------------
+  A  CheckMate T1-T20, no control plane       3 no accepted plan
+  B  CheckMate+10 T1-T30, no control plane    3 no accepted plan
+  C  CHAI T1-T30, control plane ON            3 no accepted plan
+  D  CHAI T1-T20, control plane ON            3 no accepted plan
+
+sobel-iclib
+  arm                                      reps      plans   HW-infeas   false prov   menus
+  --------------------------------------------------------------------------------------------
+  A  CheckMate T1-T20, no control plane       3 no accepted plan
+  B  CheckMate+10 T1-T30, no control plane    3 no accepted plan
+  C  CHAI T1-T30, control plane ON            3 no accepted plan
+  D  CHAI T1-T20, control plane ON            3 no accepted plan
+
+stringsearch-iclib
+  arm                                      reps      plans   HW-infeas   false prov   menus
+  --------------------------------------------------------------------------------------------
+  A  CheckMate T1-T20, no control plane       3 no accepted plan
+  B  CheckMate+10 T1-T30, no control plane    3 no accepted plan
+  C  CHAI T1-T30, control plane ON            3 no accepted plan
+  D  CHAI T1-T20, control plane ON            3 no accepted plan
+
+========================================================================================================
+POOLED ACROSS ALL BENCHMARKS AND REPEATS
+========================================================================================================
+  arm                                       cells   plans   HW-infeasible   false provenance
+  --------------------------------------------------------------------------------------------
+  A  CheckMate T1-T20, no control plane         6      26               0                 13
+  B  CheckMate+10 T1-T30, no control plane      4      20               1                 10
+  C  CHAI T1-T30, control plane ON              3      13               0                  0
+  D  CHAI T1-T20, control plane ON              3      12               0                  0
+
+====================================================================================================
+READING THIS TABLE
+====================================================================================================
+  HW-infeasible is the direct hardware-awareness measure: an operator
+  the target physically cannot run. CHAI's gatekeeper removes these
+  before the model ever sees them, so a non-zero count in an arm with
+  the control plane ON would be a defect, not a design choice.
+
+  false provenance is a LOWER BOUND from a static + behavioural
+  checker; it cannot prove a transformation is genuinely present.
+
+  menus = 1 means every function was offered the identical operator
+  list. Greater than 1 means the plan was specialised per function.
