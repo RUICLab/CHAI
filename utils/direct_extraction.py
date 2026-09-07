@@ -41,9 +41,14 @@ def extract_c_function(text, function_name):
 
 def _extract_balanced_definition(code, function_name):
     """Find ``function_name``'s definition and return it with balanced braces."""
+    # Allow comments and K&R-style declarations between the parameter list and
+    # the opening brace: `void f( ) /* doc */ {` is ordinary C and the 32B model
+    # writes it. Requiring `)\s*{` dropped those functions entirely.
+    gap = r"(?:\s|/\*.*?\*/|//[^\n]*\n|[A-Za-z_][\w \t*\[\]]*;)*"
     for match in re.finditer(
-        rf"(^|\n)[^\n;]*?\b{re.escape(function_name)}\s*\([^;{{]*\)\s*\{{",
+        rf"(^|\n)[^\n;]*?\b{re.escape(function_name)}\s*\([^;{{]*\){gap}\{{",
         code,
+        re.DOTALL,
     ):
         start = match.start(0)
         if code[start] == "\n":

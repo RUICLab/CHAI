@@ -58,8 +58,12 @@ def _knob_tainted_names(code, passes=3):
     if not tainted:
         return tainted
     body = _strip_comments(code)
+    # Only plain `x = expr;` assignments propagate taint. Compound forms
+    # (`+=`, `*=`) accumulate unrelated data and previously dragged ordinary
+    # accumulators into the tainted set, which made every loop look
+    # knob-controlled.
     assignments = re.findall(
-        r"^\s*(?:[A-Za-z_]\w*\s+)*([A-Za-z_]\w*)\s*=\s*([^;]+);",
+        r"^\s*(?:[A-Za-z_]\w*[\s*]+)*([A-Za-z_]\w*)\s*(?<![-+*/%<>!=])=(?!=)\s*([^;]+);",
         body,
         re.MULTILINE,
     )
@@ -95,11 +99,38 @@ def _knob_controlled(code, pattern):
 
 #: Structural requirement for each base-catalogue operator.
 #: ``check`` receives the comment-stripped code and the raw code.
+
+_LOOP_HEADER = re.compile(
+    r"\b(?:for|while)\s*\((?P<head>[^{]*?)\)\s*[{;]", re.DOTALL
+)
+
+
+def _knob_controls_a_loop(code):
+    """True when a knob-derived value appears in a loop's own header.
+
+    Checking "the function contains a loop AND a tainted name appears on some
+    line with a comparison" was far too loose: an accumulator that happened to
+    inherit taint made every unrelated loop count, so a knob computed into a
+    local and then ignored still passed T1. The knob has to be in the header of
+    the loop it supposedly controls.
+    """
+    tainted = _knob_tainted_names(code)
+    if not tainted:
+        return False
+    body = _strip_comments(code)
+    for match in _LOOP_HEADER.finditer(body):
+        head = match.group("head")
+        if any(re.search(rf"\b{re.escape(name)}\b", head) for name in tainted):
+            return True
+    return False
+
+
 BASE_OPERATOR_CONTRACTS = {
     1: (
-        "a loop whose bound or stride is controlled by a declared knob",
-        lambda body, raw: _has(body, r"\b(for|while)\s*\(")
-        and _knob_controlled(raw, r"\b(for|while)\s*\(|[<>]=?|\+="),
+        "a loop whose bound or stride is genuinely controlled by a declared "
+        "knob: the knob (or a value derived from it) must appear in the loop's "
+        "own condition or increment, not merely somewhere in the function",
+        lambda body, raw: _knob_controls_a_loop(raw),
     ),
     2: (
         "a knob-controlled change of numeric representation: an integer "
