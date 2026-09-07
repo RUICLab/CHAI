@@ -1,2 +1,0 @@
-gcc -fdump-rtl-expand -DLOCAL_RUN -c sobel-esp.c -o sobel-esp.o
-gcc -fdump-rtl-expand -DLOCAL_RUN -o app sobel-esp.o

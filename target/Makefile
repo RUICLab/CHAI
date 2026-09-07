@@ -1,7 +1,5 @@
-main: sobel-esp.c
-	gcc -g sobel-esp.c -o main -DLOCAL_RUN
+main:
+	gcc main.c -o main -DLOCAL_RUN -lm
 
 clean:
 	rm -f main
-
-.PHONY: main

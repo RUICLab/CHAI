@@ -119,17 +119,25 @@ if ! docker info >/dev/null 2>&1; then
 fi
 docker info >/dev/null 2>&1 || fail "docker daemon is not available"
 
-# `docker info` succeeding does NOT mean the image store is loaded: Docker
-# Desktop answers the daemon socket before it has finished indexing images, so
-# an inspect issued immediately after reports the image as missing and killed
-# two campaigns here. Wait for the image itself, not just the daemon.
+# Resolve the image id through `docker images`, not `docker image inspect`.
+# Under Docker Desktop's containerd image store, `docker image inspect <tag>`
+# reports "No such image" for an image that `docker images` lists and
+# `docker run` starts perfectly well -- it resolves per-platform, and this
+# image is linux/amd64 on an arm64 host. Two campaigns died on that false
+# negative. `docker images` is the portable lookup, and it also gives the
+# daemon time to finish indexing.
+IMAGE_DIGEST=""
 for _ in $(seq 1 60); do
-  docker image inspect "$DOCKER_IMAGE" >/dev/null 2>&1 && break
+  IMAGE_DIGEST="$(docker images --no-trunc --format '{{.Repository}}:{{.Tag}} {{.ID}}' 2>/dev/null \
+    | awk -v want="$DOCKER_IMAGE" '$1 == want {print $2; exit}')"
+  [ -n "$IMAGE_DIGEST" ] && break
   sleep 2
 done
+[ -n "$IMAGE_DIGEST" ] || fail "docker image $DOCKER_IMAGE not found in the image store"
 
-IMAGE_DIGEST="$(docker image inspect "$DOCKER_IMAGE" --format '{{.Id}}' 2>/dev/null)" \
-  || fail "docker image $DOCKER_IMAGE not found after waiting for the image store"
+# Prove the image actually runs before committing to a multi-hour campaign.
+docker run --rm "$DOCKER_IMAGE" true >/dev/null 2>&1 \
+  || fail "docker image $DOCKER_IMAGE is present but will not run"
 MODEL_DIGEST="$(docker run --rm --network host "$DOCKER_IMAGE" \
   python3 -c "
 import json,urllib.request
@@ -183,6 +191,17 @@ json.dump({
     },
 }, open(sys.argv[1], "w"), indent=2)
 PYEOF
+
+# The container mounts this repo live, so any edit during a campaign lands
+# mid-run and the cells before and after it are not the same experiment. One
+# campaign was already invalidated that way. Record the tree state and refuse
+# to start dirty unless explicitly overridden.
+if [ "$GIT_DIRTY" != "0" ] && [ "${ALLOW_DIRTY_TREE:-0}" = "0" ]; then
+  echo "ERROR: $GIT_DIRTY uncommitted file(s). The container mounts this repo," >&2
+  echo "so editing during the run splits the campaign across two versions." >&2
+  echo "Commit first, or set ALLOW_DIRTY_TREE=1 to accept that risk." >&2
+  exit 1
+fi
 
 echo "=== Ablation campaign $RUN_ID ==="
 echo "Apps   : $APPS"

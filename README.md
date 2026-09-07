@@ -120,7 +120,7 @@ CHAI runs on Linux (tested on Ubuntu 22.04). The two recommended installation pa
 | MSP430 / ARM GCC toolchain | Cross-compiles benchmarks for the target            |
 | CMake + Ninja              | Builds Fused and benchmark binaries                  |
 | `fused` (built separately) | Intermittent-computing simulator                     |
-| LLM API key                | Anthropic (Claude) **or** OpenAI **or** HuggingFace  |
+| LLM API key / local service| Anthropic (Claude), OpenAI, HuggingFace, or local Ollama |
 
 ### Option A — Docker
 
@@ -184,7 +184,17 @@ LLM_MODEL=claude-sonnet-4-20250514
 # LLM_MODEL=meta-llama/Llama-3.1-8B-Instruct
 ```
 
-The active provider is selected by `API_NAME` in `config/config.py` (`Anthropic`, `OpenAI`, or `HuggingFace`).
+The active provider is selected by `CHAI_API_NAME` in `.env` (`Anthropic`, `OpenAI`, `HuggingFace`, or `Ollama`). If unset, it defaults to OpenAI.
+
+For local Ollama, pull a model and configure the OpenAI-compatible endpoint:
+
+```dotenv
+CHAI_API_NAME=Ollama
+LLM_MODEL=qwen2.5-coder:7b
+# Use this URL when CHAI runs in Docker on Docker Desktop:
+OLLAMA_BASE_URL=http://host.docker.internal:11434/v1
+OLLAMA_API_KEY=ollama
+```
 
 ### 5.2 `config/config.py` — pipeline switches
 
@@ -196,7 +206,7 @@ The active provider is selected by `API_NAME` in `config/config.py` (`Anthropic`
 | `GIVE_LOOP_PERF_EXMAPLES`      | Inject loop-perforation examples (`0`/`1`)                              |
 | `GIVE_NEW_TECHNIQUE_EXAMPLES`  | Inject newly-added technique examples (`0`/`1`)                         |
 | `TEXT_PLANING`                 | Use plan-then-approximate flow (`1`) vs single-shot annotation (`0`)    |
-| `API_NAME`                     | `Anthropic` / `OpenAI` / `HuggingFace`                                  |
+| `CHAI_API_NAME`                | `Anthropic` / `OpenAI` / `HuggingFace` / `Ollama`                       |
 | `DEBUG`                        | Verbose `Dprint` logging (`0`/`1`)                                      |
 
 ### 5.3 Hardware profiles — `config/hardware_*.json`
@@ -230,7 +240,7 @@ The catalogue of approximation techniques is auto-loaded from JSON cards in `tec
 
 ### 5.5 Energy traces — `traces/*.csv`
 
-Voltage traces driving the Fused simulator. Each row is `<time_ms> <voltage_v>`. Sample traces from MSPSim / WISP are included. Override the trace list with `--trace <path>`.
+Voltage traces drive the Fused simulator. Each row is one voltage sample in volts. CHAI normalizes the trace (including any UTF-8 BOM) before passing it to Fused. Override the trace list with `--trace <path>`.
 
 ### 5.6 Benchmarks — `eval-apps/<name>/`
 
@@ -270,7 +280,7 @@ This executes, in order:
 python3 main.py --bm_name sobel-iclib --hardware config/hardware_msp430.json
 ```
 
-Adds: gatekeeper filtering of infeasible techniques, ranked cost output, post-LLM validation and clamping, and observability files (rejection JSON + constraints proof TXT in `logs/`).
+Adds: gatekeeper filtering of infeasible techniques, ranked cost output, post-LLM validation and clamping, and observability files in `outputs/`: rejection JSON, a constraints proof TXT, and a complete discarded-plan audit (`approximation_plan_decisions_*.json` + `.md`).
 
 ### 6.3 Without an API key (offline / repro)
 
@@ -322,6 +332,41 @@ python3 scripts/demo_hardware_profiles.py
 | Bitcount                   | `bc-iclib`             |
 
 ---
+
+## 6b. Running the comparison campaign
+
+**Read [`docs/EXPERIMENTAL_PROTOCOL.md`](docs/EXPERIMENTAL_PROTOCOL.md) before
+running or citing any comparison.** It is the frozen protocol; the settings it
+describes are enforced in code.
+
+"CHAI is better" is ambiguous between a larger operator catalogue and a
+hardware-aware control plane. The campaign is a 2x2 that separates them:
+
+| Arm | Catalogue | Control plane | Isolates |
+| --- | --- | --- | --- |
+| A `checkmate_baseline` | T1-T20 | off | reference |
+| B `operator_only_plus10` | T1-T30 | off | B - A = operator effect |
+| C `chai_plus10` | T1-T30 | on | C - B = control-plane effect |
+| D `chai_baseline_ops` | T1-T20 | on | D - A = control plane alone |
+
+```bash
+# Full campaign: 6 benchmarks x 4 arms x 3 seeds, frozen target functions
+bash scripts/run_ablation_campaign.sh
+
+# Narrow it while iterating
+APPS="sobel-iclib fft-iclib" SEEDS=2026 BO_CALLS=20 \
+  bash scripts/run_ablation_campaign.sh
+
+# Decompose the result
+python3 scripts/analyze_ablation.py experiment_results/<run_id>
+```
+
+The analysis prints the operator effect and the control-plane effect
+separately. The claim "it is not just the ten operators" is supported only if
+the control-plane column shows a larger improvement than the operator column.
+
+Results under `experiment_results/` that carry a `SUPERSEDED.md` predate this
+protocol and must not be cited.
 
 ## 7. Input and Output
 
@@ -418,7 +463,7 @@ cp fused-checkmate/build/fused fusedBin/
 # 3. Run CHAI offline (uses cached LLM responses from llm-prerun/sobel-iclib/)
 python3 main.py --bm_name sobel-iclib --no_llm \
                 --hardware config/hardware_msp430.json \
-                --trace ../traces/RF_2.csv
+                --trace traces/RF_2.csv
 
 # 4. Inspect results
 ls logs/
@@ -503,7 +548,6 @@ pytest tests/
 - `docs/WORKFLOW_DETAILED.md` — full architectural walk-through.
 - `docs/ADDING_NEW_TECHNIQUES.md` — technique card author guide.
 - `docs/TECHNIQUE_AUTO_INTEGRATION.md` — internals of `tools/add_technique.py`.
+- `docs/CHAI_VS_OPERATOR_ONLY.md` — why a larger operator catalogue is not CHAI's hardware-aware planning and enforcement layer.
 
 ---
-
-
