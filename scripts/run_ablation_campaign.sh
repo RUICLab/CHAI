@@ -52,6 +52,24 @@ BO_AUTO_BUDGET="${BO_AUTO_BUDGET:-1}"
 # is a list of repeat samples rather than optimizer seeds.
 GENERATION_ONLY="${GENERATION_ONLY:-0}"
 
+# Planner-condition knobs, so a variant runs without editing the repo (the
+# container mounts it live). Defaults reproduce this fork's current settings;
+# CHECKMATE_SETTINGS=1 reproduces upstream CheckMate's, which used a frontier
+# model with none of the added prompt context and a 0.50 bound.
+ERROR_BOUND="${ERROR_BOUND:-}"
+APPROXIMATION_CONTEXT="${APPROXIMATION_CONTEXT:-}"
+GIVE_LOOP_PERF_EXAMPLES="${GIVE_LOOP_PERF_EXAMPLES:-}"
+GIVE_NEW_TECHNIQUE_EXAMPLES="${GIVE_NEW_TECHNIQUE_EXAMPLES:-}"
+MAX_COMPILE_RETRIES="${MAX_COMPILE_RETRIES:-}"
+CHECKMATE_SETTINGS="${CHECKMATE_SETTINGS:-0}"
+if [ "$CHECKMATE_SETTINGS" != "0" ]; then
+  ERROR_BOUND="${ERROR_BOUND:-0.50}"
+  APPROXIMATION_CONTEXT=0
+  GIVE_LOOP_PERF_EXAMPLES=0
+  GIVE_NEW_TECHNIQUE_EXAMPLES=0
+  MAX_COMPILE_RETRIES="${MAX_COMPILE_RETRIES:-10}"
+fi
+
 RESULTS_ROOT="experiment_results/$RUN_ID"
 # Shared across campaigns by default: re-freezing per run costs model calls and
 # risks the arms of two campaigns being compared against different target lists.
@@ -172,6 +190,14 @@ json.dump({
     "bo_calls": $BO_CALLS,
     "bo_auto_budget": "$BO_AUTO_BUDGET" not in ("0","false","no","off"),
     "generation_only": "$GENERATION_ONLY" not in ("0","false","no","off"),
+    "planner_settings": {
+        "checkmate_settings": "$CHECKMATE_SETTINGS" != "0",
+        "error_bound": "$ERROR_BOUND" or "default 0.30",
+        "approximation_context": "$APPROXIMATION_CONTEXT" or "default 1",
+        "loop_perf_examples": "$GIVE_LOOP_PERF_EXAMPLES" or "default 1",
+        "new_technique_examples": "$GIVE_NEW_TECHNIQUE_EXAMPLES" or "default 1",
+        "max_compile_retries": "$MAX_COMPILE_RETRIES" or "default 3",
+    },
     "trace": "$TRACE",
     "capacitors": "$CAPACITORS".split(","),
     "hardware": "$HARDWARE",
@@ -297,6 +323,11 @@ for APP in $APPS; do
         -e "OLLAMA_MIN_CONTEXT=18000" -e "OLLAMA_MAX_TOKENS=2048" \
         -e "OLLAMA_MAX_RETRIES=0" \
         -e "CHAI_REQUIRE_IMPROVEMENT=1" -e "CHAI_IDENTITY_TOLERANCE=1e-6" \
+        ${ERROR_BOUND:+-e "CHAI_ERROR_BOUND=$ERROR_BOUND"} \
+        ${APPROXIMATION_CONTEXT:+-e "CHAI_APPROXIMATION_CONTEXT=$APPROXIMATION_CONTEXT"} \
+        ${GIVE_LOOP_PERF_EXAMPLES:+-e "CHAI_GIVE_LOOP_PERF_EXAMPLES=$GIVE_LOOP_PERF_EXAMPLES"} \
+        ${GIVE_NEW_TECHNIQUE_EXAMPLES:+-e "CHAI_GIVE_NEW_TECHNIQUE_EXAMPLES=$GIVE_NEW_TECHNIQUE_EXAMPLES"} \
+        ${MAX_COMPILE_RETRIES:+-e "CHAI_MAX_COMPILE_RETRIES=$MAX_COMPILE_RETRIES"} \
         -v "$REPO_ROOT:/workspace" -w /workspace \
         "$DOCKER_IMAGE" python3 -u main.py \
           --bm_name "$APP" --trace "$TRACE" --capacitors "$CAPACITORS" \

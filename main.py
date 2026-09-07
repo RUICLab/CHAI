@@ -445,7 +445,7 @@ exp_target_build_status = {}   # function -> MSP430 build/memory gate result
 exp_function_operator_sets = {}  # function -> operators selected for it
 exp_functions_no_operator = 0    # functions the selector correctly declined
 exp_approved_plans = {}          # function -> structured, approved plan
-MAX_PLAN_CONTRACT_RETRIES = 3    # plan reprompts before giving up on a function
+MAX_PLAN_CONTRACT_RETRIES = int(os.getenv("CHAI_MAX_PLAN_CONTRACT_RETRIES", "3"))  # plan reprompts before giving up on a function
 exp_plan_mismatches = 0          # generations that departed from the approved plan
 exp_plan_contract_failures = 0   # functions with no parseable, in-contract plan
 exp_candidate_rejections = {}    # rejection kind -> count (semantic vs build)
@@ -1198,9 +1198,9 @@ if not alreadyRun:
         if function_constraint_text:
             err_approximation = function_constraint_text + "\n"
         compile_retries = 0
-        MAX_COMPILE_RETRIES = 3
+        MAX_COMPILE_RETRIES = int(os.getenv("CHAI_MAX_COMPILE_RETRIES", "3"))
         selection_retries = 0
-        MAX_SELECTION_RETRIES = 3
+        MAX_SELECTION_RETRIES = int(os.getenv("CHAI_MAX_SELECTION_RETRIES", "3"))
         failed_technique_ids = set()
         base_generation_context = list(this_context)
         generation_attempt = 0
