@@ -81,25 +81,71 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 TUNNEL_PID=""
 cleanup() {
   [ -n "$TUNNEL_PID" ] && kill "$TUNNEL_PID" 2>/dev/null || true
+  [ -n "${TUNNEL_WATCHDOG_PID:-}" ] && kill "$TUNNEL_WATCHDOG_PID" 2>/dev/null || true
   [ -n "${CAFFEINATE_PID:-}" ] && kill "$CAFFEINATE_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
-if [ -n "$OLLAMA_SSH_TUNNEL" ]; then
-  echo "[tunnel] forwarding localhost:$OLLAMA_LOCAL_PORT -> $OLLAMA_SSH_TUNNEL:$OLLAMA_REMOTE_PORT"
-  ssh -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 \
-      -o ServerAliveCountMax=3 -N \
+tunnel_alive() {
+  curl -s --max-time 5 "http://localhost:${OLLAMA_LOCAL_PORT}/api/tags" >/dev/null 2>&1
+}
+
+start_tunnel() {
+  ssh -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 \
+      -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -N \
       -L "${OLLAMA_LOCAL_PORT}:localhost:${OLLAMA_REMOTE_PORT}" "$OLLAMA_SSH_TUNNEL" &
   TUNNEL_PID=$!
-  for _ in $(seq 1 20); do
-    curl -s --max-time 2 "http://localhost:${OLLAMA_LOCAL_PORT}/api/tags" >/dev/null 2>&1 && break
+  for _ in $(seq 1 25); do
+    tunnel_alive && return 0
     sleep 1
   done
-  curl -s --max-time 5 "http://localhost:${OLLAMA_LOCAL_PORT}/api/tags" >/dev/null 2>&1 \
-    || fail "SSH tunnel to $OLLAMA_SSH_TUNNEL did not expose Ollama on port $OLLAMA_REMOTE_PORT"
+  return 1
+}
+
+# A single `ssh -N -L` is a single point of failure for a multi-hour campaign,
+# and its failure mode is silent: every later cell gets "Connection refused"
+# from Ollama, produces no plan, and is recorded as though the planner had
+# nothing to say. A dropped tunnel once corrupted 42 of 48 cells that way and
+# nearly got reported as a result about prompt settings.
+#
+# So: supervise it, and check it before every cell.
+if [ -n "$OLLAMA_SSH_TUNNEL" ]; then
+  echo "[tunnel] forwarding localhost:$OLLAMA_LOCAL_PORT -> $OLLAMA_SSH_TUNNEL:$OLLAMA_REMOTE_PORT"
+  start_tunnel || fail "SSH tunnel to $OLLAMA_SSH_TUNNEL did not expose Ollama"
   OLLAMA_BASE_URL="http://host.docker.internal:${OLLAMA_LOCAL_PORT}/v1"
   echo "[tunnel] up (pid $TUNNEL_PID); inference goes to $OLLAMA_SSH_TUNNEL"
+
+  # Background supervisor: reconnect within seconds of a drop.
+  (
+    while kill -0 $$ 2>/dev/null; do
+      sleep 20
+      if ! tunnel_alive; then
+        echo "[tunnel] DOWN - reconnecting" >&2
+        kill "$TUNNEL_PID" 2>/dev/null || true
+        start_tunnel && echo "[tunnel] reconnected" >&2
+      fi
+    done
+  ) &
+  TUNNEL_WATCHDOG_PID=$!
 fi
+
+# Fail a cell loudly when the model is unreachable, instead of letting it be
+# scored as "the planner produced nothing".
+require_model() {
+  local attempt
+  for attempt in 1 2 3 4 5 6; do
+    if [ -n "$OLLAMA_SSH_TUNNEL" ]; then
+      tunnel_alive && return 0
+      echo "[model] unreachable (attempt $attempt/6); restarting tunnel" >&2
+      kill "$TUNNEL_PID" 2>/dev/null || true
+      start_tunnel || true
+    else
+      curl -s --max-time 5 "${OLLAMA_BASE_URL%/v1}/api/tags" >/dev/null 2>&1 && return 0
+    fi
+    sleep 10
+  done
+  return 1
+}
 
 # A campaign is long. Idle sleep kills the container mid-cell and leaves a
 # half-written result that looks like a legitimate failure.
@@ -312,6 +358,18 @@ for APP in $APPS; do
       [ "$GENERATION_ONLY" != "0" ] && GEN_ONLY_FLAG="--generation_only"
       LABEL="seed"; [ "$GENERATION_ONLY" != "0" ] && LABEL="rep"
       echo "[$(date +%H:%M:%S)] $ARM / $APP / $LABEL $SEED"
+      if ! require_model; then
+        echo "    SKIPPED - model unreachable; recording an invalid cell" | tee "$DEST/console.log"
+        python3 - "$DEST/status.json" <<PYEOF
+import json, sys, datetime
+json.dump({"app": "$APP", "arm": "$ARM", "seed": $SEED, "exit_code": 90,
+           "state": "invalid", "reason": "model unreachable before the cell ran",
+           "completed_at": datetime.datetime.utcnow().isoformat() + "Z"},
+          open(sys.argv[1], "w"), indent=2)
+PYEOF
+        TOTAL=$((TOTAL))
+        continue
+      fi
       set +e
       # shellcheck disable=SC2086
       docker run --rm --network host \

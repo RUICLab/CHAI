@@ -143,7 +143,12 @@ def read_cell(cell_dir):
         return cell
     cell["exit_code"] = status.get("exit_code")
     if cell["exit_code"] not in (0, None):
-        cell["invalid_reason"] = f"runner exit {cell['exit_code']}"
+        # An infrastructure failure must never be scored as "the planner
+        # produced nothing": a dropped SSH tunnel once made 42 of 48 cells look
+        # like a result about prompt settings.
+        cell["invalid_reason"] = (
+            status.get("reason") or f"runner exit {cell['exit_code']}"
+        )
         return cell
 
     logs = os.path.join(cell_dir, "logs")
