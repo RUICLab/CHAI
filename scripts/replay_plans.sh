@@ -52,9 +52,13 @@ total=0; replayed=0; skipped=0
 for planfile in "$SWEEP"/*/*/seed_*/outputs/accepted_approximation_plans_*.json; do
   [ -e "$planfile" ] || continue
   total=$((total+1))
-  arm="$(echo "$planfile" | awk -F/ '{print $2}')"
-  app="$(echo "$planfile" | awk -F/ '{print $3}')"
-  seed="$(echo "$planfile" | awk -F/ '{print $4}')"
+  # Parse relative to the sweep root, not absolute field positions: the sweep
+  # directory itself contributes a path component, which shifted every field by
+  # one and passed the arm name to --bm_name.
+  rel="${planfile#"$SWEEP"/}"
+  arm="$(echo "$rel" | awk -F/ '{print $1}')"
+  app="$(echo "$rel" | awk -F/ '{print $2}')"
+  seed="$(echo "$rel" | awk -F/ '{print $3}')"
 
   # Skip cells that produced no usable plan; there is nothing to tune.
   n_plans=$(python3 -c "
