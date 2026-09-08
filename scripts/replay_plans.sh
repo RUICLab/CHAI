@@ -28,6 +28,11 @@ BO_CALLS="${BO_CALLS:-40}"
 # CheckMate used 0.50; this fork tightened it to 0.30. At 0.30 every approximate
 # configuration on ar-iclib was rejected and only the identity point survived,
 # so the bound itself may be what suppresses any performance result.
+# utils/error_analyzer.py gives every benchmark its own bound with a written
+# justification, and that per-benchmark value overrides the global
+# CHAI_ERROR_BOUND. Forwarding only the global one silently left ar-iclib at
+# 0.30 while the run claimed to be testing 0.50, so send the per-benchmark
+# variable too.
 ERROR_BOUND="${ERROR_BOUND:-}"
 AUTO_BUDGET="${AUTO_BUDGET:-1}"
 DOCKER_IMAGE="${DOCKER_IMAGE:-chai-dev:local}"
@@ -91,6 +96,7 @@ PYEOF
     -e "CHAI_REQUIRE_IMPROVEMENT=1" -e "CHAI_IDENTITY_TOLERANCE=1e-6" \
     -e "CHAI_BO_AUTO_BUDGET=$AUTO_BUDGET" \
     ${ERROR_BOUND:+-e "CHAI_ERROR_BOUND=$ERROR_BOUND"} \
+    ${ERROR_BOUND:+-e "CHAI_ERROR_BOUND_$(echo "$app" | tr 'a-z-' 'A-Z_')=$ERROR_BOUND"} \
     -v "$PWD:/workspace" -w /workspace \
     "$DOCKER_IMAGE" python3 -u main.py \
       --bm_name "$app" --trace "$TRACE" --capacitors "$CAPACITORS" \
