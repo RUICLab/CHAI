@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import shutil
 
 from utils import llm_accounting
+from utils.message_text import message_text
 
 from config.config import(
     API_NAME,
@@ -79,9 +80,9 @@ def queryGPT(chat, chat_history, files_list, error_message=""):
                 raise
 
     chat_history.add(formatMessageForHistory(query, False))
-    chat_history.add(formatMessageForHistory(response.content, True))
+    chat_history.add(formatMessageForHistory(message_text(response), True))
 
-    return response.content
+    return message_text(response)
 
 def formatMessageForHistory(content, is_ai):
     """

@@ -25,6 +25,7 @@ from config.config import (
 )
 
 from utils import llm_accounting
+from utils.message_text import message_text
 from utils import token_budget
 from utils.utils import(
     getFunctionData,
@@ -201,10 +202,10 @@ def purposeIdentificationFunction(
             token_budget.record_provider_usage("purpose_identification", output_purpose)
 
             if PRINT_LLM_CONVO:
-                print(Fore.CYAN + str(output_purpose.content))
+                print(Fore.CYAN + str(message_text(output_purpose)))
                 print(Style.RESET_ALL)
 
-            function_purpose = output_purpose.content
+            function_purpose = message_text(output_purpose)
             break
         except Exception as error:
             purpose_retries += 1
@@ -358,7 +359,7 @@ def planStepFunction(
             token_budget.record_provider_usage("planning", output_plan)
 
             if PRINT_LLM_CONVO:
-                print(Fore.YELLOW + str(output_plan.content))
+                print(Fore.YELLOW + str(message_text(output_plan)))
                 print(Style.RESET_ALL)
 
             break
@@ -376,7 +377,7 @@ def planStepFunction(
             if plan_retries >= MAX_PLAN_RETRIES:
                 print(Fore.RED + f"  [planning] {this_function} failed after {MAX_PLAN_RETRIES} attempts." + Style.RESET_ALL)
                 break
-            _plan_content = output_plan.content if hasattr(output_plan, 'content') else str(output_plan)
+            _plan_content = message_text(output_plan)
             if PRINT_LLM_CONVO:
                 print(Fore.RED + _plan_content)
                 print(Style.RESET_ALL)
@@ -387,7 +388,7 @@ def planStepFunction(
             ]
             this_error = f"There was a format error in your previous response. {error}. Make sure to follow the JSON format stated.\n\n"
 
-    _plan_content_final = output_plan.content if hasattr(output_plan, 'content') else str(output_plan)
+    _plan_content_final = message_text(output_plan)
     this_convo = [
         formatMessageForHistory(no_context_human_prompt, False),
         formatMessageForHistory(_plan_content_final, True)
@@ -437,7 +438,7 @@ def approximateFunction(
             token_budget.record_provider_usage("approximation", output_approximated)
 
             if PRINT_LLM_CONVO:
-                print(Fore.GREEN + str(output_approximated.content))
+                print(Fore.GREEN + str(message_text(output_approximated)))
                 print(Style.RESET_ALL)
 
             # Compilation error check handeling
@@ -456,14 +457,14 @@ def approximateFunction(
                 print(Style.RESET_ALL)
 
             # Guard: output_approximated may still be a plain string if OOM hit before any response
-            _approx_content = output_approximated.content if hasattr(output_approximated, 'content') else str(output_approximated)
+            _approx_content = message_text(output_approximated)
             last_error = [
                 formatMessageForHistory(no_context_human_prompt, False),
                 formatMessageForHistory(_approx_content, True)
             ]
             this_error = f"There was a format error in your previous response. {error}. Make sure to follow the JSON format stated.\n\n"
 
-    _approx_content_final = output_approximated.content if hasattr(output_approximated, 'content') else str(output_approximated)
+    _approx_content_final = message_text(output_approximated)
     this_convo = [
         formatMessageForHistory(no_context_human_prompt, False),
         formatMessageForHistory(_approx_content_final, True)
@@ -692,7 +693,7 @@ def convertJson(
             llm_accounting.record("json_conversion")
             raw_response = chain_raw.invoke(input=human_prompt_json)
             token_budget.record_provider_usage("json_conversion", raw_response)
-            raw_text = raw_response.content if hasattr(raw_response, 'content') else str(raw_response)
+            raw_text = message_text(raw_response)
 
             # Try parsing with output_format_parser
             parsed = None
@@ -915,13 +916,13 @@ def generateExpandMakeFile(
 
 
     rtl_chat_histroy.append(formatMessageForHistory(prompt.format(files_list=files,compiler_error=compiler_error),False))
-    rtl_chat_histroy.append(formatMessageForHistory(output.content,True))
+    rtl_chat_histroy.append(formatMessageForHistory(message_text(output),True))
     
     print("\n\n\n ------ Prompt: ------ \n\n")
     print(prompt.format(files_list=files,compiler_error=compiler_error,conversation=rtl_chat_histroy))
     print("\n\n\n ------ LLM Responce: ------ \n\n")
-    print(output.content)
-    return _strip_markdown_code_fence(output.content)
+    print(message_text(output))
+    return _strip_markdown_code_fence(message_text(output))
 
 def _cached_target_function_fallback(app_name):
     """Recover known target functions when a local model emits no valid map."""
@@ -1045,7 +1046,7 @@ def invokeLLM(input, invoking_obj, stage="uncategorized"):
         print("While attempting to invoke LLM encoundered error: ",error)
         return None
     
-    return output.content
+    return message_text(output)
     
     
 def findApplicableTechniquesForFunction(
@@ -1122,7 +1123,7 @@ def findApplicableTechniquesForFunction(
             token_budget.record_provider_usage("operator_selection", output_tech_select)
 
             if PRINT_LLM_CONVO:
-                print(Fore.CYAN + str(output_tech_select.content))
+                print(Fore.CYAN + str(message_text(output_tech_select)))
                 print(Style.RESET_ALL)
 
             break
@@ -1137,7 +1138,7 @@ def findApplicableTechniquesForFunction(
                 print(Fore.RED + str(output_tech_select))
                 print(Style.RESET_ALL)
 
-    response_text = output_tech_select.content if hasattr(output_tech_select, 'content') else str(output_tech_select)
+    response_text = message_text(output_tech_select)
 
     def this_tech_select_convo_from(text):
         return [
