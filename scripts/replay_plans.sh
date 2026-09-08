@@ -25,6 +25,11 @@ TRACE="${TRACE:-traces/RF_2.csv}"
 CAPACITORS="${CAPACITORS:-68e-6}"
 HARDWARE="${HARDWARE:-config/hardware_msp430.json}"
 BO_CALLS="${BO_CALLS:-40}"
+# CheckMate used 0.50; this fork tightened it to 0.30. At 0.30 every approximate
+# configuration on ar-iclib was rejected and only the identity point survived,
+# so the bound itself may be what suppresses any performance result.
+ERROR_BOUND="${ERROR_BOUND:-}"
+AUTO_BUDGET="${AUTO_BUDGET:-1}"
 DOCKER_IMAGE="${DOCKER_IMAGE:-chai-dev:local}"
 OUT="experiment_results/$RUN_ID"
 STAGE=".replay_stage"
@@ -80,6 +85,8 @@ PYEOF
   docker run --rm --label chai.experiment=true \
     -e "CHAI_BO_CALLS=$BO_CALLS" -e "CHAI_BO_SEED=2026" \
     -e "CHAI_REQUIRE_IMPROVEMENT=1" -e "CHAI_IDENTITY_TOLERANCE=1e-6" \
+    -e "CHAI_BO_AUTO_BUDGET=$AUTO_BUDGET" \
+    ${ERROR_BOUND:+-e "CHAI_ERROR_BOUND=$ERROR_BOUND"} \
     -v "$PWD:/workspace" -w /workspace \
     "$DOCKER_IMAGE" python3 -u main.py \
       --bm_name "$app" --trace "$TRACE" --capacitors "$CAPACITORS" \
