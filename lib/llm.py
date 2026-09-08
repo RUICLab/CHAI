@@ -53,7 +53,25 @@ if API_NAME == "OpenAI":
     llmLangChain = ChatOpenAI(api_key=api_key, temperature=0, model=model, max_tokens=2048, max_retries=5, timeout=120)
 elif API_NAME == "Anthropic":
     api_key = os.getenv("ANTHROPIC_API_KEY")
-    llmLangChain = ChatAnthropic(api_key=api_key,model=model, temperature=0, max_tokens=8192)
+    # Sonnet 5 and the Opus 4.6+ family reject sampling parameters
+    # (temperature / top_p / top_k) with a 400 -- they are removed on those
+    # models, not merely ignored. Passing temperature=0 as the older models
+    # allowed makes every request fail. Determinism has to come from repeated
+    # runs instead, which is already required: the local 7B is not reproducible
+    # at temperature 0 either.
+    _no_sampling = any(
+        marker in model
+        for marker in ("sonnet-5", "opus-5", "opus-4-8", "opus-4-7", "opus-4-6",
+                       "sonnet-4-6", "fable-5", "mythos-5")
+    )
+    _anthropic_kwargs = {
+        "api_key": api_key,
+        "model": model,
+        "max_tokens": int(os.getenv("ANTHROPIC_MAX_TOKENS", "8192")),
+    }
+    if not _no_sampling:
+        _anthropic_kwargs["temperature"] = 0
+    llmLangChain = ChatAnthropic(**_anthropic_kwargs)
 elif API_NAME == "Ollama":
     # Ollama exposes an OpenAI-compatible chat-completions endpoint. When
     # CHAI runs in Docker, use host.docker.internal to reach the host service.

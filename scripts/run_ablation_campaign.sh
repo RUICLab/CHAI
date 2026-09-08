@@ -26,6 +26,9 @@ ARMS="${ARMS:-checkmate_baseline operator_only_plus10 chai_plus10 chai_baseline_
 SEEDS="${SEEDS:-2026 2027 2028}"
 BO_CALLS="${BO_CALLS:-40}"
 MODEL="${MODEL:-chai-qwen2.5-coder:7b-24k}"
+# Provider: Ollama (local/tunnelled) or an API model. An API model needs no
+# tunnel, no GPU, and no Ollama context verification.
+CHAI_PROVIDER="${CHAI_PROVIDER:-Ollama}"
 TRACE="${TRACE:-traces/RF_2.csv}"
 CAPACITORS="${CAPACITORS:-68e-6}"
 HARDWARE="${HARDWARE:-config/hardware_msp430.json}"
@@ -109,7 +112,7 @@ start_tunnel() {
 # nearly got reported as a result about prompt settings.
 #
 # So: supervise it, and check it before every cell.
-if [ -n "$OLLAMA_SSH_TUNNEL" ]; then
+if [ -n "$OLLAMA_SSH_TUNNEL" ] && [ "$CHAI_PROVIDER" = "Ollama" ]; then
   echo "[tunnel] forwarding localhost:$OLLAMA_LOCAL_PORT -> $OLLAMA_SSH_TUNNEL:$OLLAMA_REMOTE_PORT"
   start_tunnel || fail "SSH tunnel to $OLLAMA_SSH_TUNNEL did not expose Ollama"
   OLLAMA_BASE_URL="http://host.docker.internal:${OLLAMA_LOCAL_PORT}/v1"
@@ -132,6 +135,7 @@ fi
 # Fail a cell loudly when the model is unreachable, instead of letting it be
 # scored as "the planner produced nothing".
 require_model() {
+  [ "$CHAI_PROVIDER" != "Ollama" ] && return 0
   local attempt
   for attempt in 1 2 3 4 5 6; do
     if [ -n "$OLLAMA_SSH_TUNNEL" ]; then
@@ -202,18 +206,23 @@ done
 # Prove the image actually runs before committing to a multi-hour campaign.
 docker run --rm "$DOCKER_IMAGE" true >/dev/null 2>&1 \
   || fail "docker image $DOCKER_IMAGE is present but will not run"
-MODEL_DIGEST="$(docker run --rm --network host "$DOCKER_IMAGE" \
-  python3 -c "
-import json,urllib.request
-u='${OLLAMA_BASE_URL}'.replace('/v1','')+'/api/show'
-r=urllib.request.Request(u,data=json.dumps({'model':'${MODEL}'}).encode(),
-                         headers={'Content-Type':'application/json'},method='POST')
-d=json.load(urllib.request.urlopen(r,timeout=20))
-print(d.get('details',{}).get('parent_model') or d.get('digest') or
-      d.get('model_info',{}).get('general.basename','unknown'))
-print('PARAMS:'+' '.join(d.get('parameters','').split()))
-" 2>/dev/null | tr '\n' ' ')" || fail "cannot reach Ollama at $OLLAMA_BASE_URL"
-[ -n "$MODEL_DIGEST" ] || fail "Ollama did not describe model $MODEL"
+if [ "$CHAI_PROVIDER" = "Ollama" ]; then
+  MODEL_DIGEST="$(docker run --rm --network host "$DOCKER_IMAGE" \
+    python3 -c "
+  import json,urllib.request
+  u='${OLLAMA_BASE_URL}'.replace('/v1','')+'/api/show'
+  r=urllib.request.Request(u,data=json.dumps({'model':'${MODEL}'}).encode(),
+                           headers={'Content-Type':'application/json'},method='POST')
+  d=json.load(urllib.request.urlopen(r,timeout=20))
+  print(d.get('details',{}).get('parent_model') or d.get('digest') or
+        d.get('model_info',{}).get('general.basename','unknown'))
+  print('PARAMS:'+' '.join(d.get('parameters','').split()))
+  " 2>/dev/null | tr '\n' ' ')" || fail "cannot reach Ollama at $OLLAMA_BASE_URL"
+  [ -n "$MODEL_DIGEST" ] || fail "Ollama did not describe model $MODEL"
+else
+  # An API model has no local digest; the model string is the identifier.
+  MODEL_DIGEST="api:$CHAI_PROVIDER:$MODEL"
+fi
 
 GIT_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo 'not-a-git-repo')"
 GIT_DIRTY="$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
@@ -253,6 +262,7 @@ json.dump({
         "docker_image": "$DOCKER_IMAGE",
         "docker_image_digest": "$IMAGE_DIGEST",
         "model": "$MODEL",
+    "provider": "$CHAI_PROVIDER",
         "model_digest": "$MODEL_DIGEST".strip(),
         "ollama_base_url": "$OLLAMA_BASE_URL",
         "ollama_ssh_tunnel": "$OLLAMA_SSH_TUNNEL" or None,
@@ -376,9 +386,10 @@ PYEOF
         --label chai.experiment=true \
         -e "CHAI_BO_CALLS=$BO_CALLS" -e "CHAI_BO_AUTO_BUDGET=$BO_AUTO_BUDGET" \
         -e "CHAI_BO_SEED=$SEED" \
-        -e "LLM_MODEL=$MODEL" -e "API_NAME=Ollama" \
+        --env-file .env \
+        -e "LLM_MODEL=$MODEL" -e "CHAI_API_NAME=$CHAI_PROVIDER" \
         -e "OLLAMA_BASE_URL=$OLLAMA_BASE_URL" \
-        -e "OLLAMA_MIN_CONTEXT=18000" -e "OLLAMA_MAX_TOKENS=2048" \
+        ${CHAI_PROVIDER:+$([ "$CHAI_PROVIDER" = "Ollama" ] && echo "-e OLLAMA_MIN_CONTEXT=18000 -e OLLAMA_MAX_TOKENS=2048")} \
         -e "OLLAMA_MAX_RETRIES=0" \
         -e "CHAI_REQUIRE_IMPROVEMENT=1" -e "CHAI_IDENTITY_TOLERANCE=1e-6" \
         ${ERROR_BOUND:+-e "CHAI_ERROR_BOUND=$ERROR_BOUND"} \
