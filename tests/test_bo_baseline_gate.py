@@ -125,3 +125,19 @@ def test_identity_point_is_never_clamped_out_of_its_own_range(tmp_path):
     assert space[0].low <= 1.0 <= space[0].high, (
         "the dimension must be widened to contain the identity point"
     )
+
+
+def test_identity_point_is_exempt_from_the_dominance_gate(monkeypatch):
+    """Scaffolding costs a cycle or two even with every knob at its no-op value.
+
+    An approximated function carries knob declarations and the guards that
+    bypass the approximation. At the identity point it is functionally the
+    original but measured 20 power cycles against the pristine program's 19.
+    Applying the dominance gate to the reference discarded the entire plan
+    before the search began -- 8 of 9 replayed cells died exactly that way.
+    """
+    assert hasattr(bo, "_evaluating_identity_point")
+    src = __import__("inspect").getsource(bo.evaluateKnobs)
+    assert "_evaluating_identity_point" in src, (
+        "the dominance gate must consult the identity-point flag"
+    )

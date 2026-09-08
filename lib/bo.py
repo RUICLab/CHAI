@@ -49,6 +49,12 @@ LAST_OUTCOME = {}
 #: Number of candidates in the current campaign that passed every hard gate.
 _accepted_candidates = 0
 
+#: True while the declared identity point is being measured. The identity point
+#: establishes the reference the search is anchored to, so it is exempt from the
+#: dominance gate -- the scaffolding an approximated function carries even when
+#: every knob is at its no-op setting legitimately costs a cycle or two.
+_evaluating_identity_point = False
+
 # Keep the published/default search budget, while allowing a reproducible
 # reduced budget for end-to-end smoke/comparison campaigns.
 N_INITIAL_POINTS = 5
@@ -225,7 +231,12 @@ def runBayesOpt():
     # A model can emit compilable code whose "safe" defaults no longer compute
     # the original function at all. Exploring around that broken reference is
     # not a meaningful approximation experiment.
-    baseline_score = evaluateKnobs(baseline_x0)
+    global _evaluating_identity_point
+    _evaluating_identity_point = True
+    try:
+        baseline_score = evaluateKnobs(baseline_x0)
+    finally:
+        _evaluating_identity_point = False
     app_name = _app_name_or_unknown()
     if baseline_score == 100.0:
         _record_evaluation_rejection(
@@ -521,8 +532,10 @@ def evaluateKnobs(*params):
     # Hard dominance gate: a configuration that needs MORE power cycles than
     # the unapproximated program is not an approximation result.  Without this
     # the objective happily selected plans at 1.89x and 2.21x the original.
-    if REQUIRE_IMPROVEMENT and not dominates_original(
-        power_cycles, original_power_cycles
+    if (
+        REQUIRE_IMPROVEMENT
+        and not _evaluating_identity_point
+        and not dominates_original(power_cycles, original_power_cycles)
     ):
         _record_evaluation_rejection(
             app_name,
