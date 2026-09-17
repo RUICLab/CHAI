@@ -47,8 +47,11 @@ def test_bayes_opt_counts_identity_point_inside_total_budget(monkeypatch):
     score, knobs = bo.runBayesOpt()
 
     assert observed["n_calls"] == 5
+    assert observed["x0"] == [[1]]
+    assert observed["y0"] == [1.0]
     assert score == 1.0
-    assert knobs == [1]
+    assert knobs == []
+    assert bo.LAST_OUTCOME["selected"] == "original_program"
 
 
 def test_auto_budget_scales_the_search_with_plan_dimensionality(monkeypatch):
@@ -57,8 +60,10 @@ def test_auto_budget_scales_the_search_with_plan_dimensionality(monkeypatch):
 
     observed = {}
 
-    def fake_minimize(func, space, n_calls, n_initial_points, random_state):
+    def fake_minimize(func, space, n_calls, n_initial_points, random_state,
+                      x0, y0):
         observed["n_calls"] = n_calls
+        observed["x0"] = x0
 
         class Result:
             fun = 0.5
@@ -79,10 +84,40 @@ def test_auto_budget_scales_the_search_with_plan_dimensionality(monkeypatch):
 
     bo.runBayesOpt()
 
-    # 8 dimensions -> 5 initial + 1 baseline + max(10, 4*8) = 38 total.
-    assert observed["n_calls"] == 37
+    # 8 dimensions -> 38 total evaluations. Identity and the same fixed four
+    # local probes used by every sufficiently large arm seed the surrogate;
+    # dimensionality does not consume a larger share of the search budget.
+    assert observed["n_calls"] == 33
+    assert len(observed["x0"]) == 5
     assert bo.LAST_OUTCOME["dimensions"] == 8
     assert bo.LAST_OUTCOME["call_budget"] == 38
+    assert bo.LAST_OUTCOME["local_identity_probe_count"] == 4
+    assert bo.LAST_OUTCOME["global_search_calls"] == 33
+
+
+def test_conservative_neighbors_change_only_one_knob_at_a_time():
+    from skopt.space import Integer, Real
+
+    points = bo.conservative_identity_neighbors(
+        [Integer(0, 100), Integer(0, 1), Real(0.5, 1.0)],
+        [100, 0, 1.0],
+        fraction=0.10,
+    )
+
+    assert points == [
+        [90, 0, 1.0],
+        [100, 1, 1.0],
+        [100, 0, 0.95],
+    ]
+
+
+def test_probe_cap_is_independent_of_plan_dimensionality():
+    small = [[index] for index in range(5)]
+    large = [[index] for index in range(19)]
+
+    assert len(bo.evenly_spaced_probes(small, 4)) == 4
+    assert len(bo.evenly_spaced_probes(large, 4)) == 4
+    assert bo.evenly_spaced_probes(large, 4) == [[0], [6], [12], [18]]
 
 
 def test_fixed_plan_without_dimensions_is_evaluated_once(monkeypatch):

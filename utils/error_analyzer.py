@@ -379,6 +379,46 @@ def susanError(pathToCodebase):
     finally:
         os.chdir(_entry_cwd)
 
+def _parse_stringsearch_output(lines, source):
+    """Return the per-query decisions from stringsearch's LOCAL_RUN output.
+
+    The benchmark emits one 0/1 decision for each query and then a final
+    aggregate count with no trailing newline.  The aggregate is part of the
+    benchmark's output contract, but it is not another classification target
+    for the F1 metric.  Validate it against the decisions before excluding it
+    so malformed or truncated output cannot receive a valid score.
+    """
+    values = [line.strip() for line in lines]
+    if len(values) < 2:
+        raise RuntimeError(
+            f"stringsearch-iclib {source} output is missing decisions or summary"
+        )
+
+    decisions = values[:-1]
+    for i, value in enumerate(decisions):
+        if value not in ("0", "1"):
+            raise RuntimeError(
+                f"stringsearch-iclib {source} line {i} is {value!r}, "
+                "expected '0' or '1'"
+            )
+
+    try:
+        summary = int(values[-1])
+    except ValueError as exc:
+        raise RuntimeError(
+            f"stringsearch-iclib {source} summary is {values[-1]!r}, "
+            "expected an integer match count"
+        ) from exc
+
+    observed = sum(value == "1" for value in decisions)
+    if summary != observed:
+        raise RuntimeError(
+            f"stringsearch-iclib {source} summary is {summary}, "
+            f"but the decision rows contain {observed} matches"
+        )
+    return decisions
+
+
 def stringSearchError(pathToCodebase):
     _entry_cwd = os.getcwd()
     try:
@@ -401,7 +441,10 @@ def stringSearchError(pathToCodebase):
         with open("output.csv", "r") as file:
             predictions = file.read().splitlines()
 
-        # Ensure the DataFrames have the same length
+        ground_truth = _parse_stringsearch_output(ground_truth, "reference")
+        predictions = _parse_stringsearch_output(predictions, "candidate")
+
+        # Ensure both files contain the same number of per-query decisions.
         if len(ground_truth) != len(predictions):
             raise ValueError(
                 "The number of rows in ground_truth and output must be the same."
@@ -412,22 +455,11 @@ def stringSearchError(pathToCodebase):
         fp = 0
         fn = 0
 
-        # A prediction that is neither "0" nor "1" used to match none of these
-        # branches, so a candidate emitting garbage scored as a perfect run.
+        # The parser above rejects non-binary decisions and validates the
+        # benchmark's final aggregate count before it is excluded from F1.
         for i in range(len(ground_truth)):
-            truth = ground_truth[i].strip()
-            prediction = predictions[i].strip()
-
-            if truth not in ("0", "1"):
-                raise RuntimeError(
-                    f"stringsearch-iclib reference line {i} is {truth!r}, "
-                    "expected '0' or '1'"
-                )
-            if prediction not in ("0", "1"):
-                raise RuntimeError(
-                    f"stringsearch-iclib produced {prediction!r} on line {i}; "
-                    "the benchmark must emit only '0' or '1'"
-                )
+            truth = ground_truth[i]
+            prediction = predictions[i]
 
             if truth == "1" and prediction == "1":
                 tp += 1
@@ -788,4 +820,3 @@ GROUND_TRUTH_ARTIFACTS = {
 def ground_truth_files(app_name):
     """Return the reference artifacts *app_name* is scored against."""
     return list(GROUND_TRUTH_ARTIFACTS.get(app_name, []))
-

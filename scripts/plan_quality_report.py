@@ -11,17 +11,21 @@ benchmark with no exploitable approximation the two questions have completely
 different answers: every arm can tie at the identity point while their plans
 differ enormously in quality.
 
-Every dimension below is read from the ACCEPTED artifact of each run and
-re-derived here, never taken from an in-process counter. Each is a property a
-plan either has or does not, so the comparison holds even when no arm improves
-the objective.
+Accepted-plan properties below are re-derived from the ACCEPTED artifact rather
+than trusted from an in-process verdict. Raw and removed-label counts are the
+explicit exception: they are generation-process measures written before CHAI
+mutates the artifact. Keeping the two sources separate is what prevents a clean
+post-pruning artifact from being misreported as a mistake-free model output.
 
   hardware-infeasible  operators declared that the target cannot execute
                        (needs an FPU/SIMD the chip lacks). This is the direct
                        measure of hardware-awareness.
   inapplicable         operators declared that the registry says do not apply
                        to this benchmark at all
-  false provenance     declared operators the code does not implement
+  raw invalid labels   model declarations the code does not implement, before
+                       control-plane pruning (attempt-level process measure)
+  labels removed       invalid labels stripped by CHAI while salvaging code
+  unsupported shipped  declared operators absent from the accepted artifact
   per-function menus   distinct operator menus across functions; an arm with
                        no per-function selection has exactly one
   knobs/function       plan dimensionality, which the search budget must cover
@@ -42,8 +46,7 @@ from utils.knob_metadata import (                               # noqa: E402
     normalize_knob_metadata,
 )
 from utils.operator_conformance import (                        # noqa: E402
-    nonconforming_added_operator_ids,
-    nonconforming_base_operator_ids,
+    nonconforming_operator_ids,
 )
 
 ARMS = [
@@ -102,8 +105,7 @@ def assess_cell(cell_dir, hardware):
                 inapplicable.append((name, tid, technique.name))
 
         if code and declared:
-            bad = (nonconforming_added_operator_ids(code, declared)
-                   | nonconforming_base_operator_ids(code, declared))
+            bad = nonconforming_operator_ids(code, declared)
             for tid in sorted(bad):
                 false_claims.append((name, tid))
 
@@ -122,6 +124,15 @@ def assess_cell(cell_dir, hardware):
         "hardware_infeasible": infeasible,
         "inapplicable": inapplicable,
         "false_claims": false_claims,
+        "raw_false_claims": (metrics or {}).get(
+            "raw_operator_claim_violation_count"
+        ),
+        "raw_claims_checked": (metrics or {}).get(
+            "raw_operator_claims_checked"
+        ),
+        "removed_false_claims": (metrics or {}).get(
+            "removed_operator_claim_count"
+        ),
         "distinct_menus": distinct_menus,
         "per_function_selection": bool(operator_sets),
         "knobs_total": sum(knob_counts),
@@ -174,13 +185,16 @@ def main():
     print("  Properties of the plan itself, re-derived from each run's accepted")
     print("  artifact. Repeated cells show  median [min-max]  across repeats.")
 
-    totals = {arm: {"infeasible": 0, "false": 0, "plans": 0, "cells": 0}
+    totals = {arm: {"infeasible": 0, "false": 0, "plans": 0, "cells": 0,
+                    "raw_false": 0, "raw_checked": 0, "raw_measured": 0,
+                    "removed": 0,
+                    "removed_measured": 0}
               for arm, _ in ARMS}
 
     for app in apps:
         print(f"\n{app}")
         print(f"  {'arm':<40} {'reps':>4} {'plans':>10} {'HW-infeas':>11} "
-              f"{'false prov':>12} {'menus':>7}")
+              f"{'shipped bad':>12} {'menus':>7}")
         print("  " + "-" * 92)
         report["apps"][app] = {}
         for arm, label in ARMS:
@@ -206,12 +220,32 @@ def main():
             totals[arm]["false"] += sum(false_claims)
             totals[arm]["plans"] += sum(plans)
             totals[arm]["cells"] += len(observations)
+            for observation in observations:
+                raw = observation["raw_false_claims"]
+                raw_checked = observation["raw_claims_checked"]
+                removed = observation["removed_false_claims"]
+                if raw is not None and raw_checked is not None:
+                    totals[arm]["raw_false"] += raw
+                    totals[arm]["raw_checked"] += raw_checked
+                    totals[arm]["raw_measured"] += 1
+                if removed is not None:
+                    totals[arm]["removed"] += removed
+                    totals[arm]["removed_measured"] += 1
 
             report["apps"][app][arm] = {
                 "repeats": len(observations),
                 "plans": plans,
                 "hardware_infeasible": infeasible,
                 "false_claims": false_claims,
+                "raw_false_claims": [
+                    o["raw_false_claims"] for o in observations
+                ],
+                "raw_claims_checked": [
+                    o["raw_claims_checked"] for o in observations
+                ],
+                "removed_false_claims": [
+                    o["removed_false_claims"] for o in observations
+                ],
                 "distinct_menus": menus,
                 "detail": [
                     {"hardware_infeasible": o["hardware_infeasible"],
@@ -233,12 +267,17 @@ def main():
     print("POOLED ACROSS ALL BENCHMARKS AND REPEATS")
     print("=" * 104)
     print(f"  {'arm':<40} {'cells':>6} {'plans':>7} {'HW-infeasible':>15} "
-          f"{'false provenance':>18}")
-    print("  " + "-" * 92)
+          f"{'raw bad/all*':>12} {'removed*':>10} {'shipped bad':>12}")
+    print("  " + "-" * 108)
     for arm, label in ARMS:
         t = totals[arm]
+        raw = (f"{t['raw_false']}/{t['raw_checked']}"
+               if t["raw_measured"] == t["cells"] else "n/a")
+        removed = (str(t["removed"]) if t["removed_measured"] == t["cells"]
+                   else "n/a")
         print(f"  {label:<40} {t['cells']:>6} {t['plans']:>7} "
-              f"{t['infeasible']:>15} {t['false']:>18}")
+              f"{t['infeasible']:>15} {raw:>12} {removed:>10} "
+              f"{t['false']:>12}")
     report["pooled"] = totals
 
     print("\n" + "=" * 100)
@@ -249,8 +288,12 @@ def main():
     print("  before the model ever sees them, so a non-zero count in an arm with")
     print("  the control plane ON would be a defect, not a design choice.")
     print()
-    print("  false provenance is a LOWER BOUND from a static + behavioural")
-    print("  checker; it cannot prove a transformation is genuinely present.")
+    print("  * raw bad and removed are available only in campaigns run after the")
+    print("  pre-pruning instrumentation was added. They are attempt-level counts.")
+    print("  shipped bad is re-derived from accepted artifacts and is a LOWER")
+    print("  BOUND: a checker cannot prove a transformation is genuinely present.")
+    print("  A zero for CHAI is an enforcement outcome, not evidence that its")
+    print("  underlying model or planner originated no false labels.")
     print()
     print("  menus = 1 means every function was offered the identical operator")
     print("  list. Greater than 1 means the plan was specialised per function.")

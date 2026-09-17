@@ -47,37 +47,39 @@ Calling them "CheckMate" without that qualifier is misleading.
 
 | Variable | Value | Enforced by |
 | --- | --- | --- |
-| Target functions | frozen once per app, shared by all arms | `--target_functions` |
-| Error bound | 0.30 | `config.config.ERROR_BOUND` |
+| Target functions | checked-in source-derived list, shared by all arms | `config/frozen_targets/` |
+| Error bound | benchmark-specific, frozen | `utils/error_analyzer.py` |
 | Objective | see §4 | `utils/optimization_metrics.py` |
 | Trace / capacitor | `RF_2.csv` / 68 µF | runner |
 | Hardware profile | `config/hardware_msp430.json` | runner |
-| BO budget | 40 calls | `CHAI_BO_CALLS` |
-| Seeds | 2026, 2027, 2028 | `CHAI_BO_SEED` |
-| Model | `chai-qwen2.5-coder:7b-24k`, temperature 0 | runner |
+| BO budget | selected from the 20/40/80/160/250 preflight curve; identical in every arm | `CHAI_BO_CALLS` |
+| Planner repeats | 2026, 2027, 2028 labels; each is a fresh end-to-end generation | raw-response hashes |
+| Model | one frozen provider/model per campaign | runner manifest |
 
 Target selection was previously an independent LLM call in each run. That is
 how the AR comparison ended up approximating **7 functions in one arm and 9 in
-the other**, which makes a performance comparison uncontrolled. It is now
-frozen once per application and passed to every arm.
+the other**, which makes a performance comparison uncontrolled. It is now a
+checked-in source-derived inventory. The rule includes every reachable,
+source-defined computational function and excludes drivers, I/O and dead code.
+In particular, it includes `stringsearch-iclib:init_search`; the previous LLM
+selection ruled out the exact-reuse opportunity before planning began.
 
 ## 4. The objective
 
 ```
-reject   error > 0.30                          (hard accuracy gate)
+reject   error > benchmark-specific bound      (hard accuracy gate)
 reject   power_cycle_ratio > 1.0               (hard dominance gate)
-minimize 1.0 * (error / 0.30) + 1.0 * (power_cycles / original_power_cycles)
+minimize power_cycles / original_power_cycles  (inside the feasible region)
 ```
 
-Two changes from the previous formulation, both necessary:
+The primary result uses constrained optimization: accuracy is a hard
+feasibility condition and is not charged a second time in the objective
+(`CHAI_OBJECTIVE_ERROR_WEIGHT=0`). This prevents a valid 84%-of-bound result
+from needing an additional 84% cycle reduction merely to tie the original.
+Two validity rules remain necessary:
 
-* **Error is normalised by the bound.** The old objective summed a raw error in
-  `[0, 0.30]` with a ratio in `[0, ∞)`. That silently weighted the hardware term
-  roughly 3× more than accuracy while the code claimed the two were equal.
-  Dividing by the bound puts both terms on a comparable `[0, 1]` scale inside
-  the feasible region, so the weights mean what they say. Both are configurable
-  (`CHAI_OBJECTIVE_ERROR_WEIGHT`, `CHAI_OBJECTIVE_CYCLE_WEIGHT`) and must be
-  fixed before results are seen.
+* **The error bound is benchmark-specific.** Every normalized error still has
+  a written bound and candidates above it are rejected before optimization.
 * **A dominance gate rejects candidates worse than doing nothing.** The ratio
   was previously unbounded above 1, and selected plans ran at **1.89×** (AR,
   CHAI) and **2.21×** (AR, Codex repair) the original program's power cycles
@@ -106,13 +108,42 @@ campaign in which nothing worked. `bo_outcome` now records which happened:
 | --- | --- |
 | `approximation_selected` | a real approximate configuration won |
 | `no_improvement_found` | nothing beat the unapproximated program |
-| `baseline_selected` | the identity point had the best objective |
+| `baseline_selected` | the pristine unapproximated program had the best objective |
 | `baseline_not_identity` | plan discarded: declared safe point was not the identity |
 | `baseline_invalid` | plan discarded: safe point failed to build or run |
 | `no_valid_plan` | generation never produced an acceptable plan |
 
 Both `no_improvement_found` and `no_valid_plan` are legitimate findings and
 must be reported, not dropped.
+
+The generated identity point is still measured to validate the plan, but it is
+not the fallback incumbent: knob declarations and guards can make that version
+slower than the pristine program. The optimizer is seeded with the measured
+identity and a fixed, up-to-four-call sample of conservative one-knob-at-a-time
+neighbors before it combines transformations. For plans with at least four
+knobs, the probe count is identical across arms, so a larger knob set cannot
+consume more of the shared search budget.
+This keeps the safe neighborhood visible to the surrogate without relaxing any
+accuracy or validity gate.
+
+### Provenance is reported before and after enforcement
+
+CHAI may remove an unsupported operator label before writing the accepted plan.
+Consequently, a clean accepted artifact is evidence about the control plane,
+not evidence that the underlying model made no declaration error. Every new
+run records these separately:
+
+| Metric | Meaning |
+| --- | --- |
+| `raw_operator_claim_violation_count` | unsupported labels in model candidates before repair/pruning |
+| `raw_operator_claims_checked` | denominator for the raw invalid-label rate |
+| `removed_operator_claim_count` | labels CHAI stripped while salvaging a partially valid candidate |
+| accepted-artifact revalidation | unsupported labels that actually shipped |
+
+Older campaigns without the raw fields must report them as “not measured,”
+never zero. The supported claim is: **CHAI detects/removes unsupported labels
+that the unenforced baseline can ship.** This is not a claim that CHAI's planner
+originates fewer unsupported labels.
 
 ## 7. Error metrics are comparable
 
@@ -152,14 +183,20 @@ When the cross toolchain is unavailable the gate reports `skipped`, never
 `passed`, so a run performed without it cannot be mistaken for a validated one.
 This is a control-plane feature and is therefore CHAI-only.
 
-## 10. Search budget
+## 10. Search budget and repetition unit
 
-`CHAI_BO_CALLS=8` spent 1 call on the identity baseline and 5 on random initial
-points, leaving **two** model-guided evaluations for search spaces up to 16
-dimensions. Results at that budget are dominated by the random draw. The
-campaign uses 40, and `utils/bo_config.py` warns below 10 model-guided calls.
-Plan dimensionality is additionally capped by
-`--max_operators_per_function` (default 4).
+Forty calls are known to be insufficient: AR first beat the original at call
+49 and reached its best observed point at call 201. The 24-cell preflight runs
+250 calls and records every measured point. `scripts/analyze_bo_budget_curve.py`
+then recovers matched best-so-far results at 20, 40, 80, 160 and 250 calls. One
+common fixed budget is chosen before the 72-cell campaign; knob-scaled budgets
+are not the primary comparison. Identity plus up to four one-factor probes are
+inside the common budget.
+
+For API planners, the numeric BO seed does not seed generation. Each of the
+three repetitions therefore makes fresh purpose/selection/planning/generation
+calls. Verbatim planner responses and SHA-256 hashes are archived, and
+`scripts/verify_planner_repeats.py` rejects missing or duplicate repetitions.
 
 ## 11. Reporting rules
 
@@ -171,18 +208,25 @@ Plan dimensionality is additionally capped by
 * Report the measured LLM call total (`api_calls_by_stage`), not the
   generation-loop count. Makefile generation alone can issue 10 calls per
   compile test, each with up to 5 retries.
-* State the number of seeds and show the spread, not just the best run.
+* State the number of independent planner repetitions and BO seeds separately;
+  show the spread, not just the best run.
+* Report hand-written or Codex-implemented plans as implementation ablations /
+  upper bounds, never as autonomous CHAI planner results.
 
 ## 12. Compute setup
 
 Inference and simulation are separated because they have different failure
 modes.
 
-**Inference (Ollama, `chai-qwen2.5-coder:7b-24k`).** Sustained 7B inference on
-the MacBook thermally shuts the machine down mid-campaign. That does not fail
-loudly: it leaves a partially written cell that is indistinguishable from a
-legitimate failure, and it silently truncates the run. Inference therefore runs
-on the lab GPU host, reached over an SSH tunnel:
+**Inference.** The publishable campaign freezes one provider/model before it
+starts. The intended Sonnet campaign requires the exposed Anthropic credential
+to be rotated first and the runner acknowledgement
+`CONFIRM_CREDENTIAL_ROTATION=1`. Sonnet does not use Ollama or the GPU tunnel.
+
+For local-model diagnostic campaigns, sustained Ollama inference on the
+MacBook can thermally shut the machine down mid-campaign. That leaves a partial
+cell rather than a scientific result, so Ollama diagnostics run on the lab GPU
+host through an SSH tunnel:
 
 ```bash
 # one-time, from your own terminal (installs the key; needs the password once)

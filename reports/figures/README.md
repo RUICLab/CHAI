@@ -8,10 +8,10 @@ python3 scripts/make_paper_figures.py reports/plan_quality_data.json
 
 | File | Content | Suggested placement |
 | --- | --- | --- |
-| `fig1_false_provenance.{pdf,png}` | (a) false operator labels per accepted plan, pooled over 6 benchmarks; (b) the three individual repeats behind it on ar-iclib | full width (7.0 in) |
+| `fig1_false_provenance.{pdf,png}` | (a) unsupported operator labels shipped per accepted plan, pooled over 6 benchmarks; (b) the three individual repeats behind it on ar-iclib | full width (7.0 in) |
 | `fig3_coverage.{pdf,png}` | Coverage matrix: repeats yielding an accepted plan, 6 benchmarks x 4 arms | single column (3.4 in) |
 | `fig4_specialisation.{pdf,png}` | Distinct per-function operator menus | single column (3.4 in) |
-| `fig5_model_scale.{pdf,png}` | **The headline.** False provenance per plan at two model scales: qwen2.5-coder 7B vs Claude Sonnet 5 | full width (7.0 in) |
+| `fig5_model_scale.{pdf,png}` | Accepted-artifact enforcement at two model scales: qwen2.5-coder 7B vs Claude Sonnet 5 | full width (7.0 in) |
 | `all_figures.pdf` | All of the above, one page each | review copy |
 
 PDF is vector with embedded TrueType text (searchable, and it passes the usual
@@ -38,6 +38,9 @@ the ten added operators.
   ΔE 9.2 deutan, 27.6 normal vision).
 * Fig. 1 is a **rate**, not a count, because the enforced arms accept roughly
   half as many plans; a raw count would flatter them.
+* The zero bars are an enforcement outcome. CHAI checks/prunes labels before
+  writing the accepted artifact; they do not show that CHAI's planner emitted
+  no bad labels. New campaigns separately report raw, removed, and shipped.
 * Fig. 1(b) exists because the planner is not reproducible at temperature 0.
   A single run fixes no magnitude, so the individual repeats are shown rather
   than a mean with an error bar that three points cannot support.
@@ -59,10 +62,9 @@ small model being sloppy. Figure 5 answers it directly.
 | D  CHAI T1-T20, control **on** | **0.00** (0/12) | not run (billing) |
 
 Same benchmark, same frozen target list, three repeats per cell. A frontier
-model that writes valid, compiling C -- code that passes the identity gate and
-the knob-sensitivity check -- still declares operators its own code does not
-implement, at essentially the same rate as a 7B. Enforcement removes them at
-both scales.
+model can still declare operators its own code does not implement. This figure
+does not measure the raw declaration rate; it shows that enforcement prevents
+such labels from appearing in accepted artifacts at both scales.
 
 Arm D is the one that isolates the control plane from the ten added operators:
 original T1-T20 catalogue, control plane on, 0.00. It has 7B data only; the

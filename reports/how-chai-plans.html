@@ -69,14 +69,14 @@
 <div class="wrap">
 <header>
   <div class="eyebrow">CHAI · plan quality · 6 benchmarks × 4 arms × 3 repeats</div>
-  <h1>Half of every plan the baseline accepts is mislabelled</h1>
-  <p>Not a claim about speed. A claim about whether the plan says true things about the
-  code it produced, and whether it respects the chip it runs on.</p>
+  <h1>The control plane stops unsupported labels from shipping</h1>
+  <p>Not a claim about speed or about fewer raw model mistakes. This accepted-artifact
+  result asks whether unsupported operator labels survive validation and reach output.</p>
 </header>
 
 <section>
   <span class="eyebrow">Chart 1 · the headline</span>
-  <h2>False operator labels, per accepted plan</h2>
+  <h2>Unsupported labels shipped, per accepted plan</h2>
   <p>An operator the plan declares but the generated C does not implement. Normalised
   per plan, because the enforced arms accept about half as many.</p>
   <figure>
@@ -84,7 +84,7 @@
       <span><i class="sw" style="background:var(--off)"></i> control plane OFF</span>
       <span><i class="sw" style="background:var(--on)"></i> control plane ON</span>
     </div>
-    <svg viewBox="0 0 700 240" role="img" aria-label="False operator labels per accepted plan: A 0.50, B 0.50, C 0.00, D 0.00">
+    <svg viewBox="0 0 700 240" role="img" aria-label="Unsupported operator labels shipped per accepted plan: A 0.50, B 0.50, C 0.00, D 0.00">
       <line class="grid" x1="210" y1="10" x2="210" y2="205"/>
       <line class="grid" x1="330" y1="10" x2="330" y2="205"/>
       <line class="grid" x1="450" y1="10" x2="450" y2="205"/>
@@ -111,9 +111,9 @@
       <rect x="210" y="155" width="3" height="22" rx="1.5" fill="var(--on)"/>
       <text class="val" x="225" y="171">0.00 &nbsp;<tspan class="lab-s">0 of 12 plans</tspan></text>
     </svg>
-    <figcaption><b>Arm D carries the argument.</b> It uses the original T1–T20 catalogue —
-    no new operators at all — and still reaches zero. The difference is the control plane,
-    not the ten added operators.</figcaption>
+    <figcaption><b>Arm D isolates enforcement.</b> It uses the original T1–T20 catalogue —
+    no new operators — and ships no statically disproven labels. That is the control plane
+    catching/removing claims before acceptance, not evidence of a mistake-free planner.</figcaption>
   </figure>
 </section>
 
@@ -123,7 +123,7 @@
   <p>The planner is not reproducible at <code>temperature 0</code>, so a single run fixes
   nothing. Three repeats of ar-iclib, plotted individually.</p>
   <figure>
-    <svg viewBox="0 0 700 210" role="img" aria-label="False labels per repeat on ar-iclib: A 3,4,3; B 4,3,2; C 0,0,0; D 0,0,0">
+    <svg viewBox="0 0 700 210" role="img" aria-label="Unsupported labels shipped per repeat on ar-iclib: A 3,4,3; B 4,3,2; C 0,0,0; D 0,0,0">
       <line class="grid" x1="210" y1="8" x2="210" y2="170"/>
       <line class="grid" x1="330" y1="8" x2="330" y2="170"/>
       <line class="grid" x1="450" y1="8" x2="450" y2="170"/>
@@ -133,7 +133,7 @@
       <text class="lab-s" x="330" y="189" text-anchor="middle">2</text>
       <text class="lab-s" x="450" y="189" text-anchor="middle">4</text>
       <text class="lab-s" x="570" y="189" text-anchor="middle">6</text>
-      <text class="lab-s" x="435" y="205" text-anchor="middle">false operator labels in the accepted plan</text>
+      <text class="lab-s" x="435" y="205" text-anchor="middle">unsupported labels shipped in the accepted plan</text>
 
       <text class="lab" x="200" y="30" text-anchor="end">A</text>
       <line class="axis" x1="390" y1="25" x2="450" y2="25" stroke="var(--off)" stroke-width="2"/>
@@ -157,9 +157,9 @@
       <circle cx="210" cy="145" r="6" fill="var(--on)" stroke="var(--panel)" stroke-width="2"/>
       <text class="lab-s" x="228" y="149">0, 0, 0 — every repeat</text>
     </svg>
-    <figcaption>The baselines never reach zero; the enforced arms never leave it. The
-    separation is larger than the run-to-run spread, which is what makes it readable at
-    three repeats.</figcaption>
+    <figcaption>The unenforced artifacts ship unsupported labels in every repeat; the
+    enforced artifacts do not. This is evidence that validation changes what ships, not
+    that the underlying planner makes fewer raw declaration errors.</figcaption>
   </figure>
 </section>
 
@@ -218,7 +218,7 @@
 
 <section>
   <span class="eyebrow">Mechanism</span>
-  <h2>Why the enforced arms reach zero</h2>
+  <h2>Why the enforced artifacts ship zero</h2>
   <p>Four gates, in the order a candidate meets them. Each rejects a specific,
   independently checkable defect and hands the model a reason to repair.</p>
   <div class="chain">
@@ -251,8 +251,10 @@
       leans on it.</li>
       <li><b>CHAI accepts fewer plans</b> — 13 and 12 against 26 and 20. Stricter gates
       reject more, which is why the chart is a rate and not a count.</li>
-      <li><b>False provenance is a lower bound.</b> A checker can show an operator is absent;
+      <li><b>Unsupported labels shipped is a lower bound.</b> A checker can show an operator is absent;
       it cannot prove one is present.</li>
+      <li><b>The zero is partly definitional.</b> CHAI prunes disproven labels before writing
+      accepted artifacts. These runs did not record raw pre-pruning label errors; fresh runs do.</li>
     </ul>
   </div>
 </section>

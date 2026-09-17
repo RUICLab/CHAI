@@ -37,6 +37,19 @@ class SensitivityUnavailable(RuntimeError):
     """Raised when the check cannot run, as distinct from failing."""
 
 
+# These operators are intended to preserve program output at every setting.
+# Their knobs change executed work, so output-error sensitivity is the wrong
+# instrument; their strong structural contract and later cycle measurement are
+# the applicable evidence.
+OUTPUT_INVARIANT_OPERATORS = {3}
+
+
+def requires_output_sensitivity(technique_ids):
+    """Whether output change is a necessary signal for this operator set."""
+    claimed = set(technique_ids or [])
+    return not claimed or not claimed.issubset(OUTPUT_INVARIANT_OPERATORS)
+
+
 def _set_knob_in_source(directory, knob, value):
     """Rewrite ``knob``'s initializer inside the knob-declaration block."""
     pattern = re.compile(

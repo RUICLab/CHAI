@@ -1154,7 +1154,36 @@ def findApplicableTechniquesForFunction(
     declined = bool(response_text) and re.search(
         r"SELECTED_OPERATORS\s*:\s*none", response_text, re.IGNORECASE
     )
-    if declined:
+    # Exact reuse is a call-site property that a small model can miss even
+    # when shown the source. Add T3 from a general structural detector when a
+    # caller invokes the function inside a loop whose induction variable does
+    # not affect the call arguments. This is only candidate selection; all
+    # normal plan, identity, build and behavioral gates remain in force.
+    from utils.context import enforce_callsite_operator_requirements
+    candidate_ids, structurally_removed, t3_evidence = (
+        enforce_callsite_operator_requirements(
+            candidate_ids, this_function, ENTITIES
+        )
+    )
+    if 3 not in feasible_techniques:
+        t3_evidence = []
+    if 3 in structurally_removed:
+        print(
+            Fore.YELLOW
+            + f"  [techSelect] {this_function}: removed T3 because no "
+              "stable-key repeated-call evidence exists at a source call site."
+            + Style.RESET_ALL
+        )
+    if t3_evidence:
+        candidate_ids.add(3)
+        print(
+            Fore.GREEN
+            + f"  [techSelect] {this_function}: structural call-site evidence "
+              f"adds T3 ({t3_evidence[0]})."
+            + Style.RESET_ALL
+        )
+
+    if declined and not candidate_ids:
         print(
             Fore.CYAN
             + f"  [techSelect] {this_function}: model reports no applicable operator."
@@ -1187,7 +1216,10 @@ def findApplicableTechniquesForFunction(
         order = [tid for tid, *_ in (ranked_fallback or [])]
         ordered = sorted(
             candidate_ids,
-            key=lambda tid: order.index(tid) if tid in order else len(order),
+            key=lambda tid: (
+                0 if tid == 3 and t3_evidence else 1,
+                order.index(tid) if tid in order else len(order),
+            ),
         )
         dropped = set(ordered[max_operators:])
         candidate_ids = set(ordered[:max_operators])

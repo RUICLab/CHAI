@@ -39,6 +39,11 @@ def test_empty_applicable_apps_is_not_treated_as_universal():
         offered = set(get_applicable_techniques(app))
         assert not (offered & set(CATEGORICALLY_INAPPLICABLE))
 
+    # T25 is withdrawn until paired transformations exist; T27 was dominated
+    # at every measured stride on its only six-suite target.
+    assert TECHNIQUE_REGISTRY[25].applicable_apps == []
+    assert TECHNIQUE_REGISTRY[27].applicable_apps == []
+
 
 @pytest.mark.parametrize("app", BENCHMARKS)
 def test_core_operators_remain_available_everywhere(app):
@@ -48,9 +53,12 @@ def test_core_operators_remain_available_everywhere(app):
 
 
 def test_benchmark_specific_operators_stay_scoped_to_their_benchmark():
-    assert 27 in get_applicable_techniques("bc-iclib")
+    assert 27 not in get_applicable_techniques("bc-iclib")
     assert 27 not in get_applicable_techniques("fft-iclib")
     assert 22 in get_applicable_techniques("sobel-iclib")
     assert 22 not in get_applicable_techniques("bc-iclib")
-    assert 26 in get_applicable_techniques("lqi-iclib")
+    # T26 replaces an existing EWMA recurrence. lqi-iclib accumulates a
+    # delivery ratio in double arithmetic and contains no EWMA, so offering
+    # T26 there gave the planner a transformation with no matching structure.
+    assert 26 not in get_applicable_techniques("lqi-iclib")
     assert 26 not in get_applicable_techniques("sobel-iclib")

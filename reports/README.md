@@ -30,9 +30,10 @@ SEEDS="1 2 3" OLLAMA_SSH_TUNNEL=nsola5@131.193.50.170 \
   bash scripts/run_ablation_campaign.sh
 ```
 
-## Headline numbers
+## Accepted-artifact enforcement result
 
-False operator labels per accepted plan, pooled over all benchmarks and repeats:
+Unsupported operator labels shipped per accepted plan, pooled over all
+benchmarks and repeats:
 
 | Arm | Plans | False | Per plan |
 | --- | ---: | ---: | ---: |
@@ -44,6 +45,14 @@ False operator labels per accepted plan, pooled over all benchmarks and repeats:
 Arm D uses the original T1-T20 catalogue, so its result isolates the control
 plane from the ten added operators.
 
+This is an enforcement result, not a planner-error result. CHAI validates and
+prunes labels before the accepted artifact is written, so its 0.00 means the
+control plane prevented statically disproven labels from shipping. These older
+runs did not record the new pre-pruning counter and therefore cannot establish
+that CHAI's model originated fewer false labels. Fresh runs report three
+separate values: raw invalid labels, labels removed, and unsupported labels
+shipped.
+
 ## What these reports do NOT show
 
 * Nothing about speed. No arm beat the unapproximated program on any benchmark
@@ -53,5 +62,5 @@ plane from the ten added operators.
   rejection caused by the 7B planner, not by the framework.
 * CHAI accepts about half as many plans, which is why the headline is a rate
   rather than a count.
-* False provenance is a lower bound: a checker can show an operator is absent,
-  never prove one is present.
+* Unsupported labels shipped is a lower bound: a checker can show an operator
+  is absent, never prove one is present.

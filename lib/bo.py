@@ -1,4 +1,5 @@
 import json
+import math
 import os
 import random
 import subprocess
@@ -64,8 +65,21 @@ n_calls = validate_bo_call_budget(
 )
 #: When set, the per-run budget is raised to match the plan's dimensionality.
 #: A fixed 40 calls adequately searches 3 knobs and barely touches 16.
-AUTO_BUDGET = os.getenv("CHAI_BO_AUTO_BUDGET", "1").strip().lower() not in (
+AUTO_BUDGET = os.getenv("CHAI_BO_AUTO_BUDGET", "0").strip().lower() not in (
     "0", "false", "no", "off"
+)
+# Approximation quality often changes sharply when several knobs move at once.
+# Give the surrogate deterministic, one-knob-at-a-time evidence near identity
+# before asking it to combine transformations.
+LOCAL_IDENTITY_SEEDS = os.getenv("CHAI_BO_LOCAL_IDENTITY_SEEDS", "1").strip().lower() not in (
+    "0", "false", "no", "off"
+)
+LOCAL_SEED_FRACTION = float(os.getenv("CHAI_BO_LOCAL_SEED_FRACTION", "0.10"))
+# Keep the diagnostic slice of a fixed budget identical across arms.  Without
+# a cap, a 19-knob plan spent 19 calls on one-factor probes while a 5-knob plan
+# spent only 5, leaving very different amounts of multi-knob exploration.
+MAX_LOCAL_IDENTITY_SEEDS = max(
+    0, int(os.getenv("CHAI_BO_MAX_LOCAL_IDENTITY_SEEDS", "4"))
 )
 
 cur_call = 0
@@ -163,6 +177,58 @@ def getBaselineKnobs(pathToJson):
                 baseline.append(val)
 
     return baseline
+
+
+def conservative_identity_neighbors(search_space, baseline, fraction=None):
+    """Return one conservative probe per knob, keeping all other knobs safe."""
+    if fraction is None:
+        fraction = LOCAL_SEED_FRACTION
+    fraction = min(max(float(fraction), 0.0), 1.0)
+    points = []
+    seen = {tuple(baseline)}
+
+    for index, (dimension, safe_value) in enumerate(zip(search_space, baseline)):
+        low, high = dimension.low, dimension.high
+        if high <= low:
+            continue
+
+        distance_low = abs(float(safe_value) - float(low))
+        distance_high = abs(float(high) - float(safe_value))
+        direction = -1 if distance_low >= distance_high else 1
+        span = float(high) - float(low)
+
+        if isinstance(dimension, Integer):
+            delta = max(1, int(math.ceil(span * fraction)))
+            candidate = int(safe_value) + direction * delta
+            candidate = min(max(candidate, int(low)), int(high))
+        else:
+            candidate = float(safe_value) + direction * span * fraction
+            candidate = min(max(candidate, float(low)), float(high))
+
+        if candidate == safe_value:
+            continue
+        point = list(baseline)
+        point[index] = candidate
+        key = tuple(point)
+        if key not in seen:
+            seen.add(key)
+            points.append(point)
+
+    return points
+
+
+def evenly_spaced_probes(points, limit):
+    """Select at most *limit* probes while covering the full knob ordering."""
+    limit = max(0, int(limit))
+    if limit == 0:
+        return []
+    if len(points) <= limit:
+        return list(points)
+    if limit == 1:
+        return [points[len(points) // 2]]
+
+    indices = [round(i * (len(points) - 1) / (limit - 1)) for i in range(limit)]
+    return [points[index] for index in indices]
 
 
 def _app_name_or_unknown():
@@ -298,22 +364,62 @@ def runBayesOpt():
     LAST_OUTCOME["dimensions"] = len(search_space)
     LAST_OUTCOME["call_budget"] = effective_calls
 
-    remaining_calls = effective_calls - 1
+    # The identity was previously measured and then omitted from gp_minimize,
+    # so the surrogate started from unrelated, aggressive multi-knob samples.
+    # Seed it with identity plus a fixed-size set of conservative one-factor
+    # moves. These manual evaluations remain inside the same total budget. The
+    # fixed cap is essential for arm symmetry: dimensionality must not decide
+    # how much of one arm's budget remains for multi-knob exploration.
+    seed_points = [list(baseline_x0)]
+    seed_scores = [float(baseline_score)]
+    if LOCAL_IDENTITY_SEEDS:
+        available = max(0, effective_calls - 1 - N_INITIAL_POINTS)
+        max_local_seeds = min(MAX_LOCAL_IDENTITY_SEEDS, available)
+        local_points = []
+        if max_local_seeds:
+            all_local_points = conservative_identity_neighbors(
+                search_space, baseline_x0
+            )
+            local_points = evenly_spaced_probes(
+                all_local_points, max_local_seeds
+            )
+        for point in local_points:
+            seed_points.append(point)
+            seed_scores.append(float(evaluateKnobs(point)))
+    LAST_OUTCOME["surrogate_seed_points"] = len(seed_points)
+    LAST_OUTCOME["local_identity_probe_count"] = len(seed_points) - 1
+
+    remaining_calls = effective_calls - len(seed_points)
+    LAST_OUTCOME["global_search_calls"] = remaining_calls
     res = gp_minimize(
         evaluateKnobs,
         search_space,
         n_calls=remaining_calls,
         n_initial_points=min(N_INITIAL_POINTS, remaining_calls),
-        random_state=random_state
+        random_state=random_state,
+        x0=seed_points,
+        y0=seed_scores,
     )
 
     LAST_OUTCOME["candidates_evaluated"] = cur_call
     LAST_OUTCOME["candidates_accepted"] = _accepted_candidates
 
+    original_power_cycles = (
+        baseline_measurement.get("original_power_cycles", 1)
+        if baseline_measurement is not None else 1
+    )
+    original_score = constrained_optimization_metric(
+        0.0,
+        original_power_cycles,
+        original_power_cycles,
+        error_bound=campaign_bound,
+    )
+    LAST_OUTCOME["original_objective"] = original_score
+
     # ``gp_minimize`` returns the 100.0 penalty when every candidate was
     # rejected.  Comparing the baseline against that penalty silently reports
     # "the baseline won" for a campaign in which nothing worked at all.
-    if _accepted_candidates <= 1:
+    if _accepted_candidates <= 1 and baseline_score >= original_score:
         # Only the identity point itself was ever accepted.
         print(
             Fore.YELLOW
@@ -322,13 +428,17 @@ def runBayesOpt():
             + Style.RESET_ALL
         )
         LAST_OUTCOME["state"] = "no_improvement_found"
-        LAST_OUTCOME["selected"] = "identity_baseline"
-        return baseline_score, baseline_x0
+        LAST_OUTCOME["selected"] = "original_program"
+        return original_score, []
 
-    if baseline_score <= res.fun:
+    # The generated identity validates the plan but is not the incumbent. Its
+    # knob declarations and guards can cost extra cycles (20 versus 19 in AR).
+    # Doing nothing means running the pristine program, whose objective is the
+    # true fallback against which every approximation must compete.
+    if original_score <= res.fun:
         LAST_OUTCOME["state"] = "baseline_selected"
-        LAST_OUTCOME["selected"] = "identity_baseline"
-        return baseline_score, baseline_x0
+        LAST_OUTCOME["selected"] = "original_program"
+        return original_score, []
 
     LAST_OUTCOME["state"] = "approximation_selected"
     LAST_OUTCOME["selected"] = "approximate_configuration"
@@ -343,11 +453,29 @@ def _record_evaluation_rejection(app_name, knobs, reason):
     payload = {
         "timestamp": datetime.now().isoformat(),
         "app": app_name,
+        "call": cur_call,
         "knobs": list(knobs),
         "reason": str(reason),
     }
     path = f"logs/optimization_rejections_{app_name}.jsonl"
     with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(payload, default=_json_optimizer_value) + "\n")
+
+
+def _record_evaluation_trace(app_name, knobs, **measurement):
+    """Persist every successfully measured BO point with its call number."""
+    from datetime import datetime
+
+    os.makedirs("logs", exist_ok=True)
+    payload = {
+        "timestamp": datetime.now().isoformat(),
+        "app": app_name,
+        "call": cur_call,
+        "identity_probe": bool(_evaluating_identity_point),
+        "knobs": list(knobs),
+        **measurement,
+    }
+    with open(f"logs/bo_evaluations_{app_name}.jsonl", "a", encoding="utf-8") as f:
         f.write(json.dumps(payload, default=_json_optimizer_value) + "\n")
 
 
@@ -529,13 +657,32 @@ def evaluateKnobs(*params):
         "power_cycle_ratio": power_cycle_ratio,
     }
 
+    optimization_metric = constrained_optimization_metric(
+        error, power_cycles, original_power_cycles, error_bound=bound
+    )
+    improves_original = dominates_original(power_cycles, original_power_cycles)
+    _record_evaluation_trace(
+        app_name,
+        candidate_knobs,
+        error=float(error),
+        error_bound=float(bound),
+        power_cycles=int(power_cycles),
+        original_power_cycles=int(original_power_cycles),
+        power_cycle_ratio=float(power_cycle_ratio),
+        power_cycle_reduction=float(power_cycle_reduction),
+        improves_original=bool(improves_original),
+        optimization_metric=float(optimization_metric),
+        trace=trace,
+        capacitor=capacitor,
+    )
+
     # Hard dominance gate: a configuration that needs MORE power cycles than
     # the unapproximated program is not an approximation result.  Without this
     # the objective happily selected plans at 1.89x and 2.21x the original.
     if (
         REQUIRE_IMPROVEMENT
         and not _evaluating_identity_point
-        and not dominates_original(power_cycles, original_power_cycles)
+        and not improves_original
     ):
         _record_evaluation_rejection(
             app_name,
@@ -555,10 +702,6 @@ def evaluateKnobs(*params):
     # Appends the knobs, error and power cycles to logs/{appName}_{capacitor}_{trace}.csv
     with open(f"logs/{app_name}_{capacitor_number}_{trace_name}.csv", "a") as f:
         f.write(f"'{params[0]}',{error},{power_cycles}\n")
-
-    optimization_metric = constrained_optimization_metric(
-        error, power_cycles, original_power_cycles, error_bound=bound
-    )
 
     _accepted_candidates += 1
 

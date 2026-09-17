@@ -25,6 +25,10 @@ Selection rules:
 - A precision operator requires arithmetic in THIS function.
 - A data-structure or spectral operator requires that data structure or that
   transform in THIS function.
+- T3 exact keyed reuse is the call-site exception: select it for a callee that
+  recomputes reusable state when the supplied SOURCE CALL-SITE CONTEXT proves
+  repeated calls with a stable key. The repeated loop can be in the caller.
+  Do not claim T3 from the callee body alone when no call-site evidence exists.
 - If a function is a small accessor, a wrapper, or pure control flow, it is
   correct to select nothing at all.
 - Select at most {max_operators} operators. Prefer the smallest set that could

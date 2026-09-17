@@ -152,11 +152,27 @@ _IDENTIFIER = re.compile(r"[A-Za-z_]\w*")
 #: Words a REGION may use that are not identifiers from the code.
 _REGION_STOPWORDS = {
     "the", "a", "an", "in", "of", "on", "at", "to", "for", "over", "and", "or",
-    "loop", "inner", "outer", "main", "call", "calls", "statement", "block",
+    "loop", "loops", "inner", "outer", "main", "call", "calls", "statement",
+    "statements", "block", "blocks",
     "body", "function", "value", "values", "array", "buffer", "variable",
-    "computation", "accumulation", "expression", "branch", "condition", "this",
+    "computation", "computations", "accumulation", "accumulations", "expression",
+    "expressions", "branch", "branches", "condition", "conditions", "this",
     "each", "every", "all", "same", "within", "inside", "that", "which", "its",
+    "pass", "passes", "stage", "stages", "phase", "phases",
 }
+
+
+def _matches_code_identifier(token, present):
+    """Accept exact names and explicit prefix/suffix shorthand such as move_."""
+    if token in present:
+        return True
+    if len(token) < 4:
+        return False
+    if token.endswith("_"):
+        return any(identifier.startswith(token) for identifier in present)
+    if token.startswith("_"):
+        return any(identifier.endswith(token) for identifier in present)
+    return False
 
 
 def _is_existing_symbol(name, function_code):
@@ -194,7 +210,7 @@ def _fabricated_symbols(region, function_code):
             or adjacency in ("(", "[")
             or (re.search(r"[a-z][A-Z]", token) is not None)
         )
-        if looks_like_code and token not in present:
+        if looks_like_code and not _matches_code_identifier(token, present):
             suspicious.add(token)
     return suspicious
 
@@ -215,7 +231,10 @@ def _region_mentions_real_code(region, function_code):
     ]
     if not region_words:
         return False
-    return any(word in code_identifiers for word in region_words)
+    return any(
+        _matches_code_identifier(word, code_identifiers)
+        for word in region_words
+    )
 
 
 def parse_plan(text, max_operators=4, function_code=None):

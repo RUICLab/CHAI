@@ -88,8 +88,7 @@ def _final_provenance(cell_dir):
         return None
 
     try:
-        from utils.operator_conformance import nonconforming_added_operator_ids
-        from utils.operator_conformance import nonconforming_base_operator_ids
+        from utils.operator_conformance import nonconforming_operator_ids
     except Exception as import_error:  # pragma: no cover - environment issue
         print(f"  [analyser] cannot re-validate provenance: {import_error}")
         return None
@@ -103,10 +102,7 @@ def _final_provenance(cell_dir):
         if not code or not declared:
             continue
         checked += 1
-        bad = (
-            nonconforming_added_operator_ids(code, declared)
-            | nonconforming_base_operator_ids(code, declared)
-        )
+        bad = nonconforming_operator_ids(code, declared)
         if bad:
             functions_with_false_claims += 1
             false_claims += len(bad)
@@ -135,6 +131,14 @@ def read_cell(cell_dir):
         "target_build_verified": None,
         "api_calls": None,
         "max_prompt_tokens": None,
+        "raw_false_claims": None,
+        "raw_claims_checked": None,
+        "raw_candidates_checked": None,
+        "removed_false_claims": None,
+        "bo_call_budget": None,
+        "bo_dimensions": None,
+        "local_identity_probes": None,
+        "global_search_calls": None,
     }
 
     status = _load_json(os.path.join(cell_dir, "status.json"))
@@ -167,6 +171,19 @@ def read_cell(cell_dir):
     cell["api_calls"] = metrics.get("api_calls")
     cell["attempt_violations"] = metrics.get(
         "operator_conformance_violation_count", 0
+    )
+    # Added after pruning was found to make CHAI's final zero partly
+    # definitional. Never substitute the legacy post-pruning attempt counter:
+    # old campaigns genuinely did not measure the raw pre-control quantity.
+    cell["raw_false_claims"] = metrics.get(
+        "raw_operator_claim_violation_count"
+    )
+    cell["raw_claims_checked"] = metrics.get("raw_operator_claims_checked")
+    cell["raw_candidates_checked"] = metrics.get(
+        "raw_operator_candidates_checked"
+    )
+    cell["removed_false_claims"] = metrics.get(
+        "removed_operator_claim_count"
     )
     cell["final_provenance"] = _final_provenance(cell_dir)
     cell["conformance_enforced"] = metrics.get("operator_conformance_enforced")
@@ -239,6 +256,10 @@ def read_cell(cell_dir):
     cell["objective"] = number("optimization_metric")
     cell["bo_outcome"] = row.get("bo_outcome")
     cell["identity_verified"] = row.get("identity_verified")
+    cell["bo_call_budget"] = number("bo_call_budget")
+    cell["bo_dimensions"] = number("bo_dimensions")
+    cell["local_identity_probes"] = number("local_identity_probes")
+    cell["global_search_calls"] = number("global_search_calls")
     return cell
 
 
@@ -308,6 +329,28 @@ def fmt_ci(mean, half):
     return f"{mean:+.4f} +/-{half:.4f}"
 
 
+def sum_if_complete(cells, key):
+    """Sum a metric only when every cell actually measured it."""
+    values = [cell.get(key) for cell in cells]
+    if not values or any(value is None for value in values):
+        return None
+    return sum(values)
+
+
+def fmt_count(value):
+    if value is None:
+        return "n/a"
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def fmt_ratio(numerator, denominator):
+    if numerator is None or denominator is None:
+        return "n/a"
+    return f"{fmt_count(numerator)}/{fmt_count(denominator)}"
+
+
 # ---------------------------------------------------------------------------
 #  Report
 # ---------------------------------------------------------------------------
@@ -325,7 +368,12 @@ def main():
         sys.exit(f"No such campaign directory: {args.run_dir}")
 
     manifest = _load_json(os.path.join(args.run_dir, "manifest.json")) or {}
-    expected_seeds = args.expected_seeds or len(manifest.get("seeds", []) or []) or None
+    expected_seeds = (
+        args.expected_seeds
+        or len(manifest.get("planner_repeats", []) or [])
+        or len(manifest.get("seeds", []) or [])
+        or None
+    )
 
     data = collect(args.run_dir)
     if not data:
@@ -398,6 +446,16 @@ def main():
                 "attempt_violations": sum(
                     c.get("attempt_violations") or 0 for c in valid
                 ),
+                "raw_false_claims": sum_if_complete(valid, "raw_false_claims"),
+                "raw_claims_checked": sum_if_complete(
+                    valid, "raw_claims_checked"
+                ),
+                "raw_candidates_checked": sum_if_complete(
+                    valid, "raw_candidates_checked"
+                ),
+                "removed_false_claims": sum_if_complete(
+                    valid, "removed_false_claims"
+                ),
                 "final_false_claims": sum(
                     ((c.get("final_provenance") or {}).get(
                         "false_claims_in_final_plan") or 0)
@@ -414,6 +472,16 @@ def main():
                 "functions_succeeded": sum(
                     c.get("functions_succeeded") or 0 for c in valid
                 ),
+                "optimizer_budget": [
+                    {
+                        "seed": c["seed"],
+                        "total": c.get("bo_call_budget"),
+                        "dimensions": c.get("bo_dimensions"),
+                        "local_probes": c.get("local_identity_probes"),
+                        "global_search": c.get("global_search_calls"),
+                    }
+                    for c in with_config
+                ],
             }
             print(f"  {label:<26} {len(cells):>5} {len(valid):>6} "
                   f"{len(with_config):>7} {fmt_ci(mean, half):>30}")
@@ -438,42 +506,109 @@ def main():
                     print(f"      {len(unverified)} cell(s) without a verified "
                           "target build")
 
+    # ---- Search-budget symmetry -------------------------------------------
+    print("\n" + "=" * 92)
+    print("SEARCH-BUDGET SYMMETRY")
+    print("=" * 92)
+    print("  Values come from each result row. 'n/a' means an older campaign")
+    print("  predates this instrumentation; it is never interpreted as zero.")
+    print(f"\n  {'benchmark':<14} {'arm':<26} {'seed':>6} {'dims':>6} "
+          f"{'total':>7} {'local':>7} {'global':>8}")
+    print("  " + "-" * 82)
+    for app in sorted(data):
+        per_seed_global = {}
+        for arm, label in ARMS:
+            for cell in data[app].get(arm, {}).values():
+                if not cell["valid"] or not cell["produced_configuration"]:
+                    continue
+                print(
+                    f"  {app:<14} {label:<26} {cell['seed']:>6} "
+                    f"{fmt_count(cell.get('bo_dimensions')):>6} "
+                    f"{fmt_count(cell.get('bo_call_budget')):>7} "
+                    f"{fmt_count(cell.get('local_identity_probes')):>7} "
+                    f"{fmt_count(cell.get('global_search_calls')):>8}"
+                )
+                global_calls = cell.get("global_search_calls")
+                if global_calls is not None:
+                    per_seed_global.setdefault(cell["seed"], set()).add(
+                        global_calls
+                    )
+        for seed, values in per_seed_global.items():
+            if len(values) > 1:
+                report["warnings"].append(
+                    f"{app}/seed {seed}: arms received unequal global-search "
+                    f"budgets {sorted(values)}"
+                )
+
     # ---- Operator provenance -----------------------------------------------
     print("\n" + "=" * 92)
     print("OPERATOR PROVENANCE")
     print("=" * 92)
-    print("  Two different quantities. Do not add them.")
+    print("  Three different quantities. Do not add them.")
     print()
-    print("  rejected / unenforced attempts: violations seen during generation.")
-    print("    Counts every candidate attempt, including ones later retried or")
-    print("    replaced, so it is a process measure, not a claim about results.")
-    print("  false claims in FINAL plan: the accepted artifact re-validated with")
-    print("    the current checker. This is what actually ships in a results")
-    print("    table. It is a LOWER BOUND: a static checker cannot prove a")
-    print("    transformation is genuinely implemented.")
-    print(f"\n  {'benchmark':<14} {'arm':<26} {'attempts':>9} {'FINAL false':>12} "
-          f"{'of funcs':>9} {'funcs ok':>10}")
-    print("  " + "-" * 88)
+    print("  raw invalid: unsupported model-declared labels measured before any")
+    print("    CHAI pruning. This is the model-output quantity.")
+    print("  removed: labels the CHAI control plane stripped while salvaging a")
+    print("    partially valid candidate. Other raw-invalid candidates may be")
+    print("    rejected wholesale by this or a later gate.")
+    print("  shipped false: the accepted artifact re-validated with the current")
+    print("    checker. A zero in an enforced arm is an enforcement outcome, not")
+    print("    evidence that its planner made no mistakes. It remains a LOWER")
+    print("    BOUND because a static checker cannot prove implementation.")
+    print(f"\n  {'benchmark':<14} {'arm':<26} {'raw bad/all':>11} {'removed':>8} "
+          f"{'shipped false':>13} {'of funcs':>9} {'funcs ok':>10}")
+    print("  " + "-" * 98)
     total_final = 0
+    raw_totals = []
+    raw_checked_totals = []
+    removed_totals = []
+    raw_complete = True
+    removed_complete = True
     for app in sorted(data):
         for arm, label in ARMS:
             row = report["apps"].get(app, {}).get(arm)
             if not row:
                 continue
             cells = [c for c in data[app].get(arm, {}).values() if c["valid"]]
-            enforced = any(c.get("conformance_enforced") for c in cells)
-            marker = "rej" if enforced else "unenf"
             total_final += row["final_false_claims"]
+            if row["raw_false_claims"] is not None:
+                raw_totals.append(row["raw_false_claims"])
+            else:
+                raw_complete = False
+            if row["raw_claims_checked"] is not None:
+                raw_checked_totals.append(row["raw_claims_checked"])
+            else:
+                raw_complete = False
+            if row["removed_false_claims"] is not None:
+                removed_totals.append(row["removed_false_claims"])
+            else:
+                removed_complete = False
             print(f"  {app:<14} {label:<26} "
-                  f"{row['attempt_violations']:>4} {marker:<5}"
-                  f"{row['final_false_claims']:>12}"
+                  f"{fmt_ratio(row['raw_false_claims'], row['raw_claims_checked']):>11}"
+                  f"{fmt_count(row['removed_false_claims']):>8}"
+                  f"{row['final_false_claims']:>13}"
                   f"{row['final_functions_checked']:>9} "
                   f"{row['functions_succeeded']}/"
                   f"{row['functions_attempted']:<8}")
-    report["provenance"] = {"false_claims_in_final_plans": total_final}
+    report["provenance"] = {
+        "raw_invalid_claims_observed": (
+            sum(raw_totals) if raw_complete and raw_totals else None
+        ),
+        "raw_claims_checked": (
+            sum(raw_checked_totals)
+            if raw_complete and raw_checked_totals else None
+        ),
+        "claims_removed": (
+            sum(removed_totals)
+            if removed_complete and removed_totals else None
+        ),
+        "false_claims_shipped_in_final_plans": total_final,
+    }
     print()
-    print("  A false claim in an ENFORCED arm is a checker gap, not a design")
-    print("  choice: the control plane was supposed to catch it and did not.")
+    print("  CHAI's honest claim is that it detects/removes unsupported labels")
+    print("  that an unenforced baseline can ship. This table does not claim that")
+    print("  CHAI's underlying model or planner originates fewer false labels.")
+    print("  A shipped false claim in an enforced arm is a checker gap.")
 
     # ---- 2x2 effects on paired seeds --------------------------------------
     print("\n" + "=" * 86)

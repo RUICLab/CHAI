@@ -18,11 +18,21 @@ operator is present and knob-controlled; they do not prove the data-flow
 semantics are correct. They are a floor, not a proof.
 """
 
+import ast
+import json
 import re
 
 
 def _has(code, pattern):
-    return re.search(pattern, code, re.IGNORECASE | re.MULTILINE | re.DOTALL) is not None
+    """True when *pattern* occurs in real code, not merely in a comment.
+
+    ``_strip_comments`` exists so that "a check cannot be satisfied by prose
+    alone", but this predicate used to search the raw text, so a candidate that
+    only mentioned an operator in a comment satisfied its keyword test.
+    """
+    return re.search(
+        pattern, _strip_comments(code), re.IGNORECASE | re.MULTILINE | re.DOTALL
+    ) is not None
 
 
 def _strip_comments(code):
@@ -100,9 +110,331 @@ def _knob_controlled(code, pattern):
 #: Structural requirement for each base-catalogue operator.
 #: ``check`` receives the comment-stripped code and the raw code.
 
-_LOOP_HEADER = re.compile(
-    r"\b(?:for|while)\s*\((?P<head>[^{]*?)\)\s*[{;]", re.DOTALL
-)
+def _braced_block(code, start):
+    """Return (body, end_index) for the block whose '{' is at or after *start*."""
+    opening = code.find("{", start)
+    if opening == -1:
+        return "", start
+    depth = 0
+    for position in range(opening, len(code)):
+        if code[position] == "{":
+            depth += 1
+        elif code[position] == "}":
+            depth -= 1
+            if depth == 0:
+                return code[opening + 1:position], position + 1
+    return code[opening + 1:], len(code)
+
+
+def _assigned_names(fragment):
+    """Identifiers that receive a plain assignment inside *fragment*."""
+    names = set()
+    for match in re.finditer(r"\b([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*=(?!=)", fragment):
+        names.add(match.group(1))
+    return names
+
+
+_NIBBLE_INDEX = re.compile(r"&\s*0[xX]0?[fF]\b")
+
+
+def _loop_header_and_body(code, match_start):
+    """Return (header, body) for the for/while whose keyword starts at *match_start*."""
+    opening = code.find("(", match_start)
+    if opening == -1:
+        return "", ""
+    depth = 0
+    close = opening
+    for position in range(opening, len(code)):
+        if code[position] == "(":
+            depth += 1
+        elif code[position] == ")":
+            depth -= 1
+            if depth == 0:
+                close = position
+                break
+    header = code[opening + 1:close]
+    rest = code[close + 1:]
+    stripped = rest.lstrip()
+    offset = len(rest) - len(stripped)
+    if stripped.startswith("{"):
+        body, _ = _braced_block(rest, offset)
+    else:
+        end = stripped.find(";")
+        body = stripped if end == -1 else stripped[:end + 1]
+    return header, body
+
+
+def _knob_controls_nibble_traversal(code):
+    """True when a knob governs how many nibbles a nibble-indexed loop processes.
+
+    T27 is defined as processing *fewer* nibbles: at stride > 1 only every
+    n-th nibble is counted, reducing both LUT accesses and loop iterations.
+    Two weaker readings were tried and both are wrong:
+
+    * a knob anywhere near a ``+=`` or ``[`` accepted a loop that walked all
+      eight nibbles and merely added a knob as a correction term afterwards;
+    * a knob inside the nibble-selection expression (``x >> (i * 4 * nsel)``)
+      changes *which* nibble is read while still running eight iterations, so
+      it adds error without removing work, and for nsel >= 2 it shifts by 32
+      or more bits, which is undefined for a 32-bit value.
+
+    So the knob must appear in the loop's continuation condition or its
+    increment. A knob used only in the initialiser or the body does not bound
+    traversal.
+    """
+    tainted = _knob_tainted_names(code)
+    if not tainted:
+        return False
+    body_text = _strip_comments(code)
+    for match in re.finditer(r"\b(for|while)\s*\(", body_text):
+        keyword = match.group(1)
+        header, body = _loop_header_and_body(body_text, match.start())
+        if not _NIBBLE_INDEX.search(body):
+            continue
+        if keyword == "for":
+            clauses = header.split(";")
+            # Skip the initialiser: only the condition and increment bound how
+            # many iterations run.
+            governing = ";".join(clauses[1:]) if len(clauses) >= 2 else ""
+        else:
+            governing = header
+        if any(
+            re.search(r"\b" + re.escape(name) + r"\b", governing)
+            for name in tainted
+        ):
+            return True
+    return False
+
+
+def _carries_value_past_guard(code):
+    """True when a value produced under a knob-guarded branch is reused outside it.
+
+    This is the structural signature of hold/reconstruction: decimate or skip
+    inside a knob-controlled condition, then reuse the retained value for the
+    positions that were skipped. The previous test looked for the words
+    ``hold``/``reconstruct``/``interpolate``, which rejected a correct
+    zero-order-hold that happened to name its carrier ``last_sample`` and
+    accepted any candidate that merely mentioned the word in a comment.
+    """
+    tainted = _knob_tainted_names(code)
+    if not tainted:
+        return False
+    body = _strip_comments(code)
+    for match in re.finditer(r"\bif\s*\(", body):
+        opening = body.find("(", match.start())
+        depth = 0
+        condition_end = opening
+        for position in range(opening, len(body)):
+            if body[position] == "(":
+                depth += 1
+            elif body[position] == ")":
+                depth -= 1
+                if depth == 0:
+                    condition_end = position
+                    break
+        condition = body[opening + 1:condition_end]
+        if not any(re.search(rf"\b{re.escape(n)}\b", condition) for n in tainted):
+            continue
+        guarded, after = _braced_block(body, condition_end)
+        if not guarded:
+            continue
+        outside = body[:match.start()] + body[after:]
+        for name in _assigned_names(guarded):
+            if name in tainted:
+                continue
+            # The carrier must be read somewhere the guard does not cover.
+            if re.search(rf"\b{re.escape(name)}\b", outside):
+                return True
+    return False
+
+
+def _if_condition_and_statement(code, match_start):
+    """Return an ``if`` condition, its immediate statement, and its end.
+
+    This deliberately handles both braced and single-statement branches.  It
+    is only a lightweight C scanner, but balancing parentheses avoids the
+    truncated conditions produced by the old regular-expression checks.
+    """
+    opening = code.find("(", match_start)
+    if opening == -1:
+        return "", "", match_start
+    depth = 0
+    close = opening
+    for position in range(opening, len(code)):
+        if code[position] == "(":
+            depth += 1
+        elif code[position] == ")":
+            depth -= 1
+            if depth == 0:
+                close = position
+                break
+
+    rest = code[close + 1:]
+    stripped = rest.lstrip()
+    offset = close + 1 + len(rest) - len(stripped)
+    if stripped.startswith("{"):
+        statement, end = _braced_block(code, offset)
+        return code[opening + 1:close], statement, end
+    end = code.find(";", offset)
+    if end == -1:
+        end = len(code) - 1
+    return code[opening + 1:close], code[offset:end + 1], end + 1
+
+
+def _has_recomputation(fragment):
+    """Whether a cache-miss path performs observable work before key update."""
+    return bool(
+        re.search(r"\b(?:for|while|do)\b", fragment)
+        or re.search(r"\b[A-Za-z_]\w*\s*\(", fragment)
+        or re.search(r"\b[A-Za-z_]\w*\s*\[[^]]+\]\s*=", fragment)
+        or re.search(r"\b[A-Za-z_]\w*\s*=(?!=)", fragment)
+    )
+
+
+def _starts_with_exit(fragment):
+    """Whether a cache-hit branch immediately leaves the miss computation.
+
+    A return somewhere later in a braced branch is insufficient: generated
+    code duplicated the complete search in both sides of a purported T3 hit
+    test, then returned from the search normally.  That changes control-flow
+    shape but reuses no work.  T3's hit path must therefore start with the
+    early return/goto that bypasses recomputation.
+    """
+    return bool(re.match(r"\s*(?:return\b[^;]*;|goto\s+[A-Za-z_]\w*\s*;)", fragment))
+
+
+def _knob_guarded_keyed_reuse(code):
+    """Recognise exact keyed reuse without relying on identifier spelling.
+
+    T3 requires a hit guard which (1) is enabled by a declared knob, (2)
+    compares a current key with a stored key, (3) exits before recomputation,
+    and (4) updates the stored key after doing miss-path work.  Merely naming a
+    variable ``cache`` or ``table`` proves none of these properties.
+    """
+    tainted = _knob_tainted_names(code)
+    if not tainted:
+        return False
+    body = _strip_comments(code)
+    for match in re.finditer(r"\bif\s*\(", body):
+        condition, guarded, after = _if_condition_and_statement(body, match.start())
+        if not any(re.search(rf"\b{re.escape(name)}\b", condition) for name in tainted):
+            continue
+        if not _starts_with_exit(guarded):
+            continue
+
+        pairs = re.findall(
+            r"\b([A-Za-z_]\w*)\s*==\s*([A-Za-z_]\w*)\b", condition
+        )
+        for left, right in pairs:
+            if left == right or left in tainted or right in tainted:
+                continue
+            tail = body[after:]
+            for stored, current in ((left, right), (right, left)):
+                update = re.search(
+                    rf"\b{re.escape(stored)}\s*=(?!=)\s*"
+                    rf"(?:\([^;)]*\)\s*)*\b{re.escape(current)}\b\s*;",
+                    tail,
+                )
+                if update and _has_recomputation(tail[:update.start()]):
+                    return True
+    return False
+
+
+def _knob_controlled_lossy_container(code):
+    """Recognise a knob-sized hashed/bitset container without name heuristics."""
+    body = _strip_comments(code)
+    has_knob_index_reduction = _knob_controlled(code, r"[%&]")
+    has_indexed_storage = bool(re.search(r"\b[A-Za-z_]\w*\s*\[[^]]+\]", body))
+    has_compact_membership_logic = bool(
+        re.search(r"(?:<<|>>|\||&|\^)\s*[^;]+", body)
+    )
+    return has_knob_index_reduction and has_indexed_storage and has_compact_membership_logic
+
+
+def _calls_in(fragment):
+    names = set(re.findall(r"\b([A-Za-z_]\w*)\s*\(", fragment))
+    return names - {"if", "for", "while", "switch", "sizeof", "return"}
+
+
+def _knob_selected_call_surrogate(code):
+    """Recognise a knob-selected arithmetic/table alternative to a call."""
+    tainted = _knob_tainted_names(code)
+    if not tainted:
+        return False
+    body = _strip_comments(code)
+    for match in re.finditer(r"\bif\s*\(", body):
+        condition, first, after = _if_condition_and_statement(body, match.start())
+        if not any(re.search(rf"\b{re.escape(name)}\b", condition) for name in tainted):
+            continue
+        rest = body[after:].lstrip()
+        if not re.match(r"else\b", rest):
+            continue
+        rest = re.sub(r"^else\b", "", rest, count=1).lstrip()
+        if rest.startswith("{"):
+            second, _ = _braced_block(rest, 0)
+        else:
+            end = rest.find(";")
+            second = rest if end == -1 else rest[:end + 1]
+
+        first_calls, second_calls = _calls_in(first), _calls_in(second)
+        first_alt = bool(re.search(r"(?:[+*/-]|<<|>>|\[[^]]+\])", first))
+        second_alt = bool(re.search(r"(?:[+*/-]|<<|>>|\[[^]]+\])", second))
+        if (first_calls and not second_calls and second_alt) or (
+            second_calls and not first_calls and first_alt
+        ):
+            return True
+    return False
+
+
+def _probabilistic_decision(code):
+    """Recognise PRNG state generation feeding a knob-controlled decision."""
+    body = _strip_comments(code)
+    has_random_source = bool(
+        re.search(r"\b(?:rand|random)\s*\(", body)
+        or (re.search(r"\^", body) and re.search(r"(?:>>|<<)", body))
+    )
+    return has_random_source and bool(_knob_controlled_conditions(code))
+
+
+def _knob_controlled_spatial_fill(code):
+    """Recognise 2-D anchor sampling plus knob-bounded output filling.
+
+    A plain two-dimensional perforation writes only anchor pixels. Spatial
+    downsampling must additionally traverse the skipped block and write every
+    output position. The canonical shape therefore has two knob-controlled
+    anchor loops plus two knob-controlled fill loops and a 2-D array write.
+    """
+    tainted = _knob_tainted_names(code)
+    if not tainted:
+        return False
+    body = _strip_comments(code)
+    controlled_headers = [
+        header for header in _loop_headers(body)
+        if any(re.search(rf"\b{re.escape(name)}\b", header) for name in tainted)
+    ]
+    has_2d_output_write = bool(
+        re.search(
+            r"\b[A-Za-z_]\w*\s*\[[^]]+\]\s*\[[^]]+\]\s*=",
+            body,
+        )
+    )
+    return len(controlled_headers) >= 4 and has_2d_output_write
+
+
+def _loop_headers(code):
+    """Yield balanced for/while headers, including casts and nested calls."""
+    for match in re.finditer(r"\b(?:for|while)\s*\(", code):
+        opening = code.find("(", match.start())
+        depth = 0
+        for position in range(opening, len(code)):
+            character = code[position]
+            if character == "(":
+                depth += 1
+            elif character == ")":
+                depth -= 1
+                if depth == 0:
+                    yield code[opening + 1:position]
+                    break
 
 
 def _knob_controls_a_loop(code):
@@ -118,8 +450,7 @@ def _knob_controls_a_loop(code):
     if not tainted:
         return False
     body = _strip_comments(code)
-    for match in _LOOP_HEADER.finditer(body):
-        head = match.group("head")
+    for head in _loop_headers(body):
         if any(re.search(rf"\b{re.escape(name)}\b", head) for name in tainted):
             return True
     return False
@@ -144,9 +475,10 @@ BASE_OPERATOR_CONTRACTS = {
         ),
     ),
     3: (
-        "a cache/table lookup guarded by a hit test before recomputation",
-        lambda body, raw: _has(body, r"\b(cache|memo|lookup|lut|_tab)\w*\b")
-        and _has(body, r"\bif\s*\("),
+        "exact keyed reuse: a knob-enabled key-equality hit guard exits "
+        "before recomputation, while the miss path performs work and then "
+        "updates the stored key",
+        lambda body, raw: _knob_guarded_keyed_reuse(raw),
     ),
     4: (
         "a knob-controlled branch that skips work",
@@ -154,9 +486,9 @@ BASE_OPERATOR_CONTRACTS = {
         and _knob_controlled(raw, r"\b(if|continue|goto)\b|[<>=!]="),
     ),
     5: (
-        "an approximate container (filter/hash/skip structure) with a knob",
-        lambda body, raw: _has(body, r"\b(bloom|filter|hash|skip|sketch)\w*\b")
-        and bool(_knob_names(raw)),
+        "a knob-sized hashed/bitset container: the knob controls index "
+        "reduction into compact indexed storage with bitwise membership logic",
+        lambda body, raw: _knob_controlled_lossy_container(raw),
     ),
     7: (
         "a knob-controlled early termination of an iterative computation",
@@ -188,8 +520,7 @@ BASE_OPERATOR_CONTRACTS = {
     ),
     13: (
         "a stored previous result reused under a knob-controlled condition",
-        lambda body, raw: _has(body, r"\b(prev|last|cached|stored)\w*\b")
-        and _has(body, r"\bif\s*\("),
+        lambda body, raw: _carries_value_past_guard(raw),
     ),
     14: (
         "two computation paths of different fidelity selected by a knob",
@@ -203,8 +534,7 @@ BASE_OPERATOR_CONTRACTS = {
     ),
     19: (
         "a cheaper surrogate replacing an expensive call, under a knob",
-        lambda body, raw: _knob_controlled(raw, r"\bif\s*\(")
-        and _has(body, r"\b(approx|surrogate|poly|taylor|lookup|lut)\w*\b"),
+        lambda body, raw: _knob_selected_call_surrogate(raw),
     ),
     20: (
         "behaviour that adapts to the input under a knob-controlled test",
@@ -319,17 +649,24 @@ def nonconforming_added_operator_ids(code, technique_ids):
                 "and leaving the loop condition unchanged is not an early exit"
             )
         elif technique_id == 22:
-            ok = (
-                _knob_controlled(code, r"\b(?:for|while)\s*\(|\+=|\[")
-                and _has(code, r"\b(?:fill|interpolat|nearest|hold)\w*\b")
+            ok = _knob_controlled_spatial_fill(code)
+            requirement = (
+                "two-dimensional knob-controlled anchor sampling plus bounded "
+                "fill loops that write the skipped output positions"
             )
-            requirement = "a spatial stride/downsample knob plus explicit skipped-output filling"
         elif technique_id == 23:
             ok = (
-                _knob_controlled(code, r"\b(?:for|while)\s*\(|\+=|\[")
-                and _has(code, r"\b(?:reconstruct|interpolat|zero_order|hold)\w*\b")
+                (
+                    _knob_controlled(code, r"\b(?:for|while)\s*\(|\+=|\[")
+                    or _knob_controlled_conditions(code)
+                )
+                and _carries_value_past_guard(code)
             )
-            requirement = "a temporal decimation/stride knob plus reconstruction"
+            requirement = (
+                "a temporal decimation/stride knob plus reconstruction: a value "
+                "retained under the knob-guarded branch and reused for the "
+                "decimated positions"
+            )
         elif technique_id == 24:
             ok = _has(code, r"\b(?:cabs|hypot|magnitude)\w*\s*\(")
             requirement = "magnitude extraction (for example cabs/hypot) from FFT values"
@@ -348,14 +685,20 @@ def nonconforming_added_operator_ids(code, technique_ids):
                 code,
                 r"(?:char|uint8_t|int)\s+[A-Za-z_]\w*\s*\[\s*16\s*\]\s*=\s*\{",
             )
+            # The 4-bit shift may be written `i * 4)`, `i * 4 * sel)` or
+            # `>> 4`; requiring the closing paren rejected the middle form.
             has_nibble_index = _has(code, r"&\s*0[xX]0?[fF]\b") and (
-                _has(code, r"\*\s*4\s*\)") or _has(code, r">>\s*4\b")
+                _has(code, r"\*\s*4\b") or _has(code, r">>\s*4\b")
             )
-            has_stride = _has(code, r"\bnibble_stride\b")
+            # The stride must be knob-controlled, but its identifier is the
+            # model's to choose. Requiring the literal name ``nibble_stride``
+            # tested vocabulary rather than behaviour and rejected every
+            # candidate bc-iclib produced (15 declared, 0 accepted).
+            has_stride = _knob_controls_nibble_traversal(code)
             ok = has_lut and has_nibble_index and has_stride
             requirement = (
                 "a local initialized 16-entry LUT, 4-bit (& 0xF) indexing, "
-                "and a nibble_stride knob"
+                "and a knob controlling the nibble loop bound, increment, or selected nibble index"
             )
         elif technique_id == 28:
             ok = bool(_knob_controlled_conditions(code)) and _has(
@@ -369,15 +712,119 @@ def nonconforming_added_operator_ids(code, technique_ids):
             requirement = "a radix_mode knob with power-of-two shift/mask conversion"
         else:  # T30
             ok = (
-                _knob_controlled(code, r"\[|\+=|\bfor\s*\(")
-                and _has(code, r"\b(?:fill|hold|interpolat|representative|anchor)\w*\b")
+                (
+                    _knob_controlled(code, r"\[|\+=|\bfor\s*\(")
+                    or _knob_controlled_conditions(code)
+                )
+                and _carries_value_past_guard(code)
             )
-            requirement = "segment/change knobs plus representative-value filling"
+            requirement = (
+                "segment/change knobs plus a representative value retained and "
+                "reused for non-representative positions"
+            )
 
         if not ok:
             invalid.add(technique_id)
 
     return invalid
+
+
+def _knob_initialisers(code):
+    """Return {knob: int_initialiser} parsed from the knob declaration block."""
+    match = re.search(
+        r"/\*\s*Knob Variables Declaration Start\s*\*/(.*?)"
+        r"/\*\s*Knob Variables Declaration End\s*\*/",
+        code,
+        re.DOTALL,
+    )
+    if not match:
+        return {}
+    values = {}
+    for decl in re.finditer(
+        r"\b[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*=\s*(-?\d+)", match.group(1)
+    ):
+        values[decl.group(1)] = int(decl.group(2))
+    return values
+
+
+def _normalise_knob_ranges(knob_ranges):
+    """Accept the several shapes knobRanges is stored in and return {knob: (lo, hi)}."""
+    if isinstance(knob_ranges, str):
+        for loader in (json.loads, ast.literal_eval):
+            try:
+                knob_ranges = loader(knob_ranges)
+                break
+            except Exception:
+                continue
+    out = {}
+    if isinstance(knob_ranges, dict):
+        knob_ranges = [knob_ranges]
+    for entry in knob_ranges or []:
+        if not isinstance(entry, dict):
+            continue
+        for name, bounds in entry.items():
+            if isinstance(bounds, (list, tuple)) and len(bounds) == 2:
+                try:
+                    out[name] = (int(bounds[0]), int(bounds[1]))
+                except (TypeError, ValueError):
+                    continue
+    return out
+
+
+def _divisor_knobs(code):
+    """Knob-derived names that appear as a '/' or '%' divisor in real code."""
+    tainted = _knob_tainted_names(code)
+    if not tainted:
+        return set()
+    body = _strip_comments(code)
+    found = set()
+    for match in re.finditer(r"[/%]\s*\(?\s*(?:\([^)]*\)\s*)?([A-Za-z_]\w*)", body):
+        if match.group(1) in tainted:
+            found.add(match.group(1))
+    return found
+
+
+def validate_knob_safety(code, knob_ranges):
+    """Reject knob declarations that are unsafe or inconsistent with their range.
+
+    Two defects shipped in every arm of the ar-iclib campaign and neither
+    operator-conformance nor the plan contract caught them:
+
+    * ``int decimation_factor = 0;`` used as ``samplesInWindow % decimation_factor``
+      divides by zero at the identity point itself, and the declared range
+      ``[0, 8]`` lets BayesOpt evaluate it directly.
+    * the same declaration carried the comment ``1 = identity`` while
+      initialising to ``0``, so the code's own identity contradicted its plan.
+    """
+    errors = []
+    ranges = _normalise_knob_ranges(knob_ranges)
+    initialisers = _knob_initialisers(code)
+    divisors = _divisor_knobs(code)
+
+    for name in sorted(divisors):
+        low, high = ranges.get(name, (None, None))
+        if low is not None and low <= 0 <= high:
+            errors.append(
+                f"knob {name} is used as a divisor but its range [{low}, {high}] "
+                f"includes 0; narrow the range so the divisor cannot be zero"
+            )
+        elif initialisers.get(name) == 0:
+            errors.append(
+                f"knob {name} is used as a divisor but is initialised to 0, "
+                f"which divides by zero at the identity point"
+            )
+
+    for name, value in sorted(initialisers.items()):
+        if name not in ranges:
+            continue
+        low, high = ranges[name]
+        if not low <= value <= high:
+            errors.append(
+                f"knob {name} is initialised to {value}, which is outside its "
+                f"declared range [{low}, {high}]"
+            )
+
+    return "; ".join(errors)
 
 
 def validate_operator_conformance(code, technique_ids):
@@ -393,15 +840,15 @@ def validate_operator_conformance(code, technique_ids):
 
     requirements = {
         21: "an early break/return controlled by a threshold or iteration-budget knob",
-        22: "a spatial stride/downsample knob plus explicit skipped-output filling",
-        23: "a temporal decimation/stride knob plus reconstruction",
+        22: "two-dimensional knob-controlled anchor sampling plus bounded fill loops that write the skipped output positions",
+        23: "a temporal decimation/stride knob plus a retained value reused for the decimated positions",
         24: "magnitude extraction (for example cabs/hypot) from FFT values",
         25: "a lazy/cache/budget knob guarding deferred preprocessing",
         26: "an EWMA/estimate recurrence using an integer right-shift knob",
-        27: "a local initialized 16-entry LUT, 4-bit (& 0xF) indexing, and a nibble_stride knob",
+        27: "a local initialized 16-entry LUT, 4-bit (& 0xF) indexing, and a knob controlling the nibble loop bound, increment, or selected nibble index",
         28: "tier/gate logic controlling expensive spectral features",
         29: "a radix_mode knob with power-of-two shift/mask conversion",
-        30: "segment/change knobs plus representative-value filling",
+        30: "segment/change knobs plus a representative value reused for non-representative positions",
     }
     for technique_id in sorted(invalid):
         errors.append(f"T{technique_id} requires {requirements[technique_id]}")
@@ -414,14 +861,25 @@ def validate_operator_conformance(code, technique_ids):
     )
 
 
+def nonconforming_operator_ids(code, technique_ids):
+    """Return every unsupported declared ID across the complete catalogue."""
+    claimed = set(technique_ids)
+    return (
+        nonconforming_base_operator_ids(code, claimed)
+        | nonconforming_added_operator_ids(code, claimed)
+    )
+
+
 def validate_hardware_operator_conformance(code, technique_ids, hw_profile):
     """Validate implementation semantics that depend on target capabilities.
 
-    Catalogue feasibility alone is insufficient for T2 on a no-FPU target:
-    multiplying a floating-point result by a knob is value scaling, not a
-    lower-cost precision implementation.  Require a knob-controlled integer
-    or fixed-point path.  T6 likewise needs real probabilistic control rather
-    than a label attached to deterministic arithmetic.
+    Generic operator conformance already requires T2 to contain a
+    knob-controlled shift, mask, or narrowing cast. Do not repeat that check
+    here using a small whitelist of knob names: valid code such as
+    ``value >>= quant_shift`` was rejected merely because its knob was not
+    called ``precision_mode``. This layer retains genuinely hardware-specific
+    rules: no floating-point knobs on a no-FPU target, and real probabilistic
+    control for T6.
     """
     if hw_profile is None:
         return ""
@@ -429,39 +887,8 @@ def validate_hardware_operator_conformance(code, technique_ids, hw_profile):
     claimed = set(technique_ids)
     errors = []
 
-    if 2 in claimed and not hw_profile.has_fpu:
-        has_precision_mode = _has(
-            code,
-            r"\b(?:precision_mode|use_integer_math|fixed_point(?:_mode)?|"
-            r"precision_bits|fractional_bits)\b",
-        )
-        has_controlled_path = _has(
-            code,
-            r"\bif\s*\([^)]*\b(?:precision_mode|use_integer_math|"
-            r"fixed_point(?:_mode)?|precision_bits|fractional_bits)\b[^)]*\)",
-        )
-        has_fixed_arithmetic = _has(
-            code,
-            r"(?:\b(?:int32_t|uint32_t|long)\b|\(\s*(?:long|int32_t|uint32_t)\s*\)|"
-            r"(?:<<|>>)\s*\w+)",
-        )
-        if not (has_precision_mode and has_controlled_path and has_fixed_arithmetic):
-            errors.append(
-                "T2 on a no-FPU target requires a knob-controlled integer/fixed-point "
-                "arithmetic path; floating-point output scaling is not precision scaling"
-            )
-
     if 6 in claimed:
-        has_probability_knob = _has(
-            code,
-            r"\b(?:probability|sample_rate|random_threshold|lfsr|rng|seed)\w*\b",
-        )
-        has_probability_logic = _has(
-            code,
-            r"\b(?:rand|random|lfsr|rng)\w*\s*(?:\(|=)|"
-            r"\bif\s*\([^)]*\b(?:probability|sample_rate|random_threshold)\w*\b",
-        )
-        if not (has_probability_knob and has_probability_logic):
+        if not _probabilistic_decision(code):
             errors.append(
                 "T6 requires an implemented random/pseudorandom decision controlled "
                 "by a probability or sampling knob"
@@ -520,6 +947,31 @@ def prune_unimplemented_added_operator_claims(function_dict, technique_ids):
     return retained, [action]
 
 
+def prune_unimplemented_operator_claims(function_dict, technique_ids):
+    """Retain a valid implemented subset instead of rejecting the whole plan.
+
+    Provenance correction used to apply only to T21-T30.  A candidate that
+    genuinely implemented T1 but also mislabeled an inert reuse path as T13 was
+    therefore discarded wholesale.  Dropping a statically disproven label does
+    not weaken validation: the remaining IDs still have to pass their own
+    contracts, and a candidate with no substantiated operator is left untouched
+    so the normal validator rejects it.
+    """
+    claimed = set(technique_ids)
+    code = function_dict.get("completeFunction", "")
+    invalid = nonconforming_operator_ids(code, claimed)
+    retained = claimed - invalid
+    if not invalid or not retained:
+        return claimed, []
+
+    function_dict["technique_numbers"] = sorted(retained)
+    action = (
+        "discarded unimplemented operator claim(s): "
+        + ", ".join(f"T{identifier}" for identifier in sorted(invalid))
+    )
+    return retained, [action]
+
+
 def repair_operator_candidate(function_dict, technique_ids, hw_profile=None):
     """Install deterministic backends for operators with a canonical C form.
 
@@ -539,8 +991,8 @@ def repair_operator_candidate(function_dict, technique_ids, hw_profile=None):
         and function_dict.get("functionName") == "sobel_filtering"
         and hw_profile is not None
         and not hw_profile.has_fpu
-        and validate_hardware_operator_conformance(
-            function_dict.get("completeFunction", ""), {2}, hw_profile
+        and validate_operator_conformance(
+            function_dict.get("completeFunction", ""), {2}
         )
     ):
         function_dict["completeFunction"] = """void sobel_filtering(void)

@@ -158,6 +158,7 @@ from utils.validator import(
     validateFunctionContract,
     repairFunctionCandidate,
     buildFocusedRepairRequest,
+    find_fewshot_identifier_leakage,
 )
 from lib.hw_validator import extract_technique_ids_from_convo, validate_technique_ids
 
@@ -170,7 +171,11 @@ from utils import llm_accounting
 from utils import token_budget
 from utils.target_build import validate_target_build
 from utils.identity_gate import IdentityCheckUnavailable, verify_identity
-from utils.knob_sensitivity import SensitivityUnavailable, verify_knobs_have_effect
+from utils.knob_sensitivity import (
+    SensitivityUnavailable,
+    requires_output_sensitivity,
+    verify_knobs_have_effect,
+)
 from utils.direct_extraction import build_plan_entry
 from lib.plan_contract import (
     check_implementation_matches_plan,
@@ -186,9 +191,11 @@ from utils.retry_context import (
     json_conversion_context,
 )
 from utils.operator_conformance import (
-    prune_unimplemented_added_operator_claims,
+    nonconforming_operator_ids,
+    prune_unimplemented_operator_claims,
     repair_operator_candidate,
     validate_hardware_operator_conformance,
+    validate_knob_safety,
     validate_operator_conformance,
 )
 from lib.technique_registry import get_applicable_techniques
@@ -424,7 +431,8 @@ selection_constraint_text = catalog_constraint_text
 hw_feasible = None         # dict[int, TechniqueEntry]  |  None  (app-wide, post opt_level slice)
 hw_ranked = None           # sorted list of (id, name, cost)  |  None  (app-wide, post opt_level slice)
 hw_rejection_log = []      # human-readable rejection lines (app-level, for startup printout)
-hw_llm_raw_responses = []  # collected raw LLM planning/approx outputs
+hw_llm_raw_responses = []  # collected raw approximation outputs in every arm
+planner_raw_responses = []  # verbatim planning responses, including retries
 hw_validated_ids = set()   # final validated technique IDs
 hw_invalid_ids = set()     # IDs rejected by post-LLM validator
 hw_reprompted_ids = set()  # LLM references rejected before JSON conversion
@@ -452,6 +460,11 @@ exp_candidate_rejections = {}    # rejection kind -> count (semantic vs build)
 exp_canonical_backend_used = {}  # function -> canonical backend actions applied
 exp_post_repair_mismatches = 0   # candidates that diverged from the plan after repair
 exp_conformance_violations = {}  # function -> operator-label violations (both arms)
+exp_knob_safety_violations = {}  # function -> unsafe knob declarations (all arms)
+exp_raw_claim_violations = {}    # pre-control model claims, before CHAI pruning
+exp_removed_operator_claims = {} # invalid labels stripped from salvaged candidates
+exp_raw_claims_checked = 0       # pre-control labels given a conformance check
+exp_raw_candidates_checked = 0   # executable model candidates checked pre-control
 exp_identity_rejections = 0      # candidates whose declared identity was not the identity
 exp_inert_knob_rejections = 0    # candidates whose knobs changed nothing
 exp_knob_sensitivity = {}        # function -> per-knob behavioural result
@@ -1028,6 +1041,14 @@ if not alreadyRun:
                     ranked_fallback=hw_ranked,
                 )
             )
+            for role, text in this_tech_select_convo:
+                if role == "ai":
+                    planner_raw_responses.append({
+                        "stage": "operator_selection",
+                        "function": this_function,
+                        "attempt": 0,
+                        "response": str(text),
+                    })
             exp_function_operator_sets[this_function] = sorted(function_operator_ids)
 
             if not function_operator_ids:
@@ -1070,6 +1091,20 @@ if not alreadyRun:
         function_constraint_text = build_function_constraint_text(
             function_feasible, this_function
         )
+        if function_feasible is not None and 3 in function_feasible:
+            from utils.context import loop_invariant_callsite_evidence
+            exact_reuse_evidence = loop_invariant_callsite_evidence(
+                this_function, ENTITIES
+            )
+            if exact_reuse_evidence:
+                function_constraint_text += (
+                    "\n\nSOURCE-PROVEN T3 OPPORTUNITY:\n- "
+                    + "\n- ".join(exact_reuse_evidence)
+                    + "\nPlan exact keyed reuse: on a knob-enabled key hit, "
+                      "return before recomputing; after a miss, recompute and "
+                      "update the stored key. Preserve the complete knob-off "
+                      "path as the identity."
+                )
 
         if TEXT_PLANING:
             # Inject hardware-aware planning text into the platform architecture
@@ -1092,6 +1127,12 @@ if not alreadyRun:
             plan_text = "\n".join(
                 str(message) for role, message in this_plan_anno_convo if role == "ai"
             )
+            planner_raw_responses.append({
+                "stage": "planning",
+                "function": this_function,
+                "attempt": 0,
+                "response": plan_text,
+            })
             this_function_code = (
                 getFunctionData(ENTITIES, this_function) or {}
             ).get("completeFunction", "")
@@ -1137,6 +1178,12 @@ if not alreadyRun:
                         for role, message in this_plan_anno_convo
                         if role == "ai"
                     )
+                    planner_raw_responses.append({
+                        "stage": "planning",
+                        "function": this_function,
+                        "attempt": plan_attempts,
+                        "response": plan_text,
+                    })
                     approved_plan, plan_errors = parse_plan(
                         plan_text,
                         max_operators=args.max_operators_per_function,
@@ -1229,6 +1276,7 @@ if not alreadyRun:
             current_technique_ids = extract_technique_ids_from_convo(
                 this_approx_convo
             )
+            model_declared_technique_ids = set(current_technique_ids)
 
             # Operator provenance must come from the model response itself;
             # never infer it from the prompt or from the generated C shape.
@@ -1371,11 +1419,11 @@ if not alreadyRun:
                         break
                     continue
 
-            # Collect raw LLM response for observability
-            if hw_feasible is not None:
-                for role, txt in this_approx_convo:
-                    if role == "ai":
-                        hw_llm_raw_responses.append(str(txt))
+            # Collect raw LLM response in every arm. Limiting this to CHAI made
+            # cross-arm generation-repeat audits impossible.
+            for role, txt in this_approx_convo:
+                if role == "ai":
+                    hw_llm_raw_responses.append(str(txt))
 
             """
                 Step 4: Convert approximation to JSON format and Compile and Validate
@@ -1424,8 +1472,29 @@ if not alreadyRun:
                     output_format_parser=approximatedDataParser,
                 )
 
-            # Persist exact model-declared provenance with the executable plan.
+            # Initialise executable provenance from the model declaration. A
+            # CHAI arm may correct this field below; the untouched declaration
+            # and any unsupported IDs are retained in experiment metrics.
             approximate_function["technique_numbers"] = sorted(current_technique_ids)
+
+            # Measure the model output before any control-plane repair. This is
+            # deliberately recorded in every arm. Final accepted artifacts are
+            # measured separately: CHAI's pruning can make those clean, but it
+            # cannot retroactively make the model's original claim correct.
+            exp_raw_candidates_checked += 1
+            exp_raw_claims_checked += len(model_declared_technique_ids)
+            raw_invalid_ids = nonconforming_operator_ids(
+                approximate_function.get("completeFunction", ""),
+                model_declared_technique_ids,
+            )
+            if raw_invalid_ids:
+                exp_raw_claim_violations.setdefault(this_function, []).append(
+                    {
+                        "attempt": generation_attempt,
+                        "declared": sorted(model_declared_technique_ids),
+                        "unsupported": sorted(raw_invalid_ids),
+                    }
+                )
 
             # Canonical backends replace the model's candidate wholesale with a
             # hand-written, benchmark-specific implementation. That is a
@@ -1467,8 +1536,8 @@ if not alreadyRun:
                 repairFunctionCandidate(approximate_function)
             )
 
-            # Small local models sometimes describe a valid T1/T2 transform
-            # but append an added-operator ID that is not present in the C.
+            # Models sometimes implement a valid subset of their declared
+            # transforms but append another operator ID that is not in the C.
             # Preserve the executable, declared transform while removing only
             # the statically disproven extra claim. If no real claim remains,
             # the conformance validator below rejects the candidate normally.
@@ -1476,11 +1545,22 @@ if not alreadyRun:
             # control plane. Leave the baseline's declared labels untouched so
             # its mislabelling rate stays measurable.
             if hw_feasible is not None:
+                claims_before_pruning = set(current_technique_ids)
                 current_technique_ids, provenance_repairs = (
-                    prune_unimplemented_added_operator_claims(
+                    prune_unimplemented_operator_claims(
                         approximate_function, current_technique_ids
                     )
                 )
+                removed_claims = claims_before_pruning - set(current_technique_ids)
+                if removed_claims:
+                    exp_removed_operator_claims.setdefault(
+                        this_function, []
+                    ).append(
+                        {
+                            "attempt": generation_attempt,
+                            "removed": sorted(removed_claims),
+                        }
+                    )
                 deterministic_repairs.extend(provenance_repairs)
             if deterministic_repairs:
                 record_generation_repair(
@@ -1576,8 +1656,44 @@ if not alreadyRun:
                     }
                 )
 
-            err_comp = conformance_error if hw_feasible is not None else ""
-            if err_comp:
+            # Knob safety is enforced in EVERY arm, unlike operator conformance.
+            # Conformance is a provenance question and enforcing it in a
+            # baseline would hand that arm a piece of CHAI's control plane.
+            # Dividing by zero is not provenance: it is undefined behaviour, and
+            # a measurement taken from a program that executes it is void for
+            # any arm. ar-iclib shipped `samplesInWindow % decimation_factor`
+            # with decimation_factor declared `= 0` and ranged [0, 8], so the
+            # identity point itself divided by zero.
+            knob_safety_error = validate_knob_safety(
+                approximate_function.get("completeFunction", ""),
+                approximate_function.get("knobRanges"),
+            )
+            if knob_safety_error:
+                exp_knob_safety_violations.setdefault(this_function, []).append(
+                    {
+                        "attempt": generation_attempt,
+                        "error": knob_safety_error,
+                    }
+                )
+
+            leaked_example_ids = find_fewshot_identifier_leakage(
+                approximate_function.get("completeFunction", "")
+            )
+            err_comp = ""
+            if leaked_example_ids:
+                err_comp = (
+                    "candidate copied demonstration-only identifier(s): "
+                    + ", ".join(leaked_example_ids)
+                    + ". Reimplement the approved structure using identifiers "
+                      "declared by the target program."
+                )
+                rejection_kind = "example_identifier_leakage"
+            elif hw_feasible is not None:
+                err_comp = conformance_error
+            if knob_safety_error and not err_comp:
+                err_comp = knob_safety_error
+                rejection_kind = "knob_safety"
+            if err_comp and rejection_kind is None:
                 rejection_kind = "operator_conformance"
             elif conformance_error:
                 print(
@@ -1655,23 +1771,48 @@ if not alreadyRun:
             # bound or branch implements no operator, however it is named.
             if not err_comp and args.knob_sensitivity != "off":
                 if ensure_ground_truth(app_name):
-                    try:
-                        knobs_ok, knob_message, knob_detail = (
-                            verify_knobs_have_effect(
-                                app_name,
-                                f"compilation_testing/ApxFiles_{this_function}",
-                                approximate_function,
-                            )
-                        )
-                        exp_knob_sensitivity[this_function] = knob_detail
-                    except SensitivityUnavailable as unavailable:
+                    # T3 exact keyed reuse intentionally changes work without
+                    # changing output. Only waive output sensitivity when its
+                    # strong structural conformance has already passed.
+                    if (
+                        not conformance_error
+                        and not requires_output_sensitivity(current_technique_ids)
+                    ):
                         knobs_ok, knob_message = True, ""
+                        # ``knobVariables`` may be serialized as a Python-list
+                        # string at this point, so do not iterate over it here.
+                        # The conformance report is the authoritative per-knob
+                        # structural evidence for exact T3.
+                        knob_detail = {
+                            "T3": "output-invariant exact reuse; structural "
+                                  "hit-path control verified, performance "
+                                  "measured in BO"
+                        }
+                        exp_knob_sensitivity[this_function] = knob_detail
                         print(
-                            Fore.YELLOW
-                            + f"  [knob sensitivity] skipped for {this_function}: "
-                              f"{unavailable}"
+                            Fore.CYAN
+                            + f"  [knob sensitivity] {this_function}: output "
+                              "sensitivity not applicable to conforming exact T3"
                             + Style.RESET_ALL
                         )
+                    else:
+                        try:
+                            knobs_ok, knob_message, knob_detail = (
+                                verify_knobs_have_effect(
+                                    app_name,
+                                    f"compilation_testing/ApxFiles_{this_function}",
+                                    approximate_function,
+                                )
+                            )
+                            exp_knob_sensitivity[this_function] = knob_detail
+                        except SensitivityUnavailable as unavailable:
+                            knobs_ok, knob_message = True, ""
+                            print(
+                                Fore.YELLOW
+                                + f"  [knob sensitivity] skipped for {this_function}: "
+                                  f"{unavailable}"
+                                + Style.RESET_ALL
+                            )
                     if not knobs_ok:
                         exp_inert_knob_rejections += 1
                         if args.knob_sensitivity == "strict":
@@ -1883,7 +2024,9 @@ if hw_feasible_full is not None:
     print(f"  → Approximation-plan audit: {decision_json}")
     print(f"  → Approximation-plan summary: {decision_md}")
 
-# Preserve accepted code, knob spaces, and exact model-declared operator IDs.
+# Preserve accepted code, knob spaces, and final operator IDs after any
+# control-plane correction. Raw model declarations live in experiment metrics
+# and must not be inferred from this accepted artifact.
 # The transient approximation directory is intentionally deleted after a run.
 os.makedirs("outputs", exist_ok=True)
 accepted_plan_path = (
@@ -1917,6 +2060,21 @@ print(f"  -> Accepted-plan archive: {accepted_plan_path}")
 #  Experiment Metrics Summary
 # ---------------------------------------------------------------------------
 if not alreadyRun:
+    # Each repetition must be a fresh planner generation, not merely a new BO
+    # seed over one cached plan. Preserve the verbatim responses and a stable
+    # digest so the campaign analyzer can verify independence.
+    import hashlib
+    planner_archive = (
+        f"outputs/raw_planner_responses_{app_name}_"
+        f"{(hw_profile.name + '_' + args.hardware_control) if hw_profile else 'baseline'}.json"
+    )
+    planner_bytes = json.dumps(
+        planner_raw_responses, ensure_ascii=False, separators=(",", ":")
+    ).encode("utf-8")
+    planner_response_sha256 = hashlib.sha256(planner_bytes).hexdigest()
+    with open(planner_archive, "w", encoding="utf-8") as file:
+        json.dump(planner_raw_responses, file, ensure_ascii=False, indent=2)
+
     exp_technique_clamped = len(hw_clamped_ids) if isinstance(hw_clamped_ids, list) else 0
     print("\n" + "=" * 60)
     print("  EXPERIMENT METRICS SUMMARY")
@@ -1969,6 +2127,9 @@ if not alreadyRun:
         "api_calls": llm_accounting.total(),
         "api_calls_by_stage": llm_accounting.snapshot(),
         "api_calls_generation_loop_only": exp_api_calls,
+        "planner_response_archive": planner_archive,
+        "planner_response_sha256": planner_response_sha256,
+        "planner_response_count": len(planner_raw_responses),
         "context_budget_estimated": token_budget.summary(),
         "context_budget_measured": token_budget.measured_summary(),
         "compile_failures": exp_compile_failures,
@@ -2001,9 +2162,30 @@ if not alreadyRun:
         "plan_conformance_rejections": exp_plan_mismatches,
         "plan_conformance_post_repair_rejections": exp_post_repair_mismatches,
         "operator_conformance_enforced": hw_feasible_full is not None,
+        "knob_safety_violations": exp_knob_safety_violations,
+        "knob_safety_violation_count": sum(
+            len(v) for v in exp_knob_safety_violations.values()
+        ),
         "operator_conformance_violations": exp_conformance_violations,
         "operator_conformance_violation_count": sum(
             len(v) for v in exp_conformance_violations.values()
+        ),
+        # These pre-control fields distinguish model behaviour from the
+        # control plane's enforcement outcome. Counts are operator labels, not
+        # candidate attempts.
+        "raw_operator_claim_violations": exp_raw_claim_violations,
+        "raw_operator_claims_checked": exp_raw_claims_checked,
+        "raw_operator_candidates_checked": exp_raw_candidates_checked,
+        "raw_operator_claim_violation_count": sum(
+            len(record.get("unsupported", []))
+            for records in exp_raw_claim_violations.values()
+            for record in records
+        ),
+        "removed_operator_claims": exp_removed_operator_claims,
+        "removed_operator_claim_count": sum(
+            len(record.get("removed", []))
+            for records in exp_removed_operator_claims.values()
+            for record in records
         ),
         "plan_contract_failures": exp_plan_contract_failures,
         "direct_plan_extractions": exp_direct_extractions,
@@ -2194,6 +2376,10 @@ columns = [
     "bo_outcome",
     "identity_verified",
     "candidates_accepted",
+    "bo_call_budget",
+    "bo_dimensions",
+    "local_identity_probes",
+    "global_search_calls",
 ]
 df = pd.DataFrame(columns=columns)
 
@@ -2250,29 +2436,35 @@ for trace in tqdm(traces, desc="Optimizing for trace: "):
         Dprint(f"Best knobs: {best_knobs}")
         Dprint(f"Best score (E+C): {best_score}")
 
-        # Find the error and checkpoints using the best knobs from logs/{appName}_{capacitor}_{trace}.csv
+        # Find the error and power cycles using the best knobs. The pristine
+        # original is outside the approximation search space: mapping an
+        # original-program outcome back to generated identity knobs can report
+        # their extra scaffolding cost as though it were the baseline.
         best_error = None
         best_checkpoints = None
-        with open(f"logs/{app_name}_{capacitor_number}_{trace_name}.csv", "r") as f:
-            reader = csv.reader(f)
-            next(reader)  # Skip the header row
+        if bo_outcome.get("selected") == "original_program":
+            best_knobs = []
+            best_error = 0.0
+            best_checkpoints = original_checkpoints
+        else:
+            with open(f"logs/{app_name}_{capacitor_number}_{trace_name}.csv", "r") as f:
+                reader = csv.reader(f)
+                next(reader)  # Skip the header row
 
-            # Match the best knobs with the knobs_list in the csv file
-            for row in reader:
-                checkpoints = row[-1]
-                error = row[-2]
-                knobs_list_str = row[:-2]  # Extract the knobs list as a string
+                # Match the best knobs with the knobs_list in the csv file
+                for row in reader:
+                    checkpoints = row[-1]
+                    error = row[-2]
+                    knobs_list_str = row[:-2]  # Extract the knobs list as a string
 
-                # Convert knobs_list_str (which is something like "[1','3','4]") to actual list
-                # Remove unwanted characters and convert it to a proper list
-                knobs_list_str = (','.join(knobs_list_str)).replace("'", "")  # Merge if knobs_list_str is split across multiple columns
-                # knobs_list = ast.literal_eval(knobs_list_str.replace("'", ""))  # Convert the string to a list of integers
+                    # Merge columns split by commas inside the serialized list.
+                    knobs_list_str = (','.join(knobs_list_str)).replace("'", "")
 
-                Dprint(str(knobs_list_str) , str(best_knobs), str(knobs_list_str) == str(best_knobs))
-                if str(knobs_list_str) == str(best_knobs):
-                    best_error = error
-                    best_checkpoints = checkpoints
-                    break
+                    Dprint(str(knobs_list_str) , str(best_knobs), str(knobs_list_str) == str(best_knobs))
+                    if str(knobs_list_str) == str(best_knobs):
+                        best_error = error
+                        best_checkpoints = checkpoints
+                        break
 
         # Guard: if no config passed the error bound the CSV has no
         # matching row, so best_checkpoints / best_error are still None.
@@ -2298,6 +2490,10 @@ for trace in tqdm(traces, desc="Optimizing for trace: "):
             columns[9]: bo_outcome.get("state", "unknown"),
             columns[10]: bo_outcome.get("identity_verified", False),
             columns[11]: bo_outcome.get("candidates_accepted", 0),
+            columns[12]: bo_outcome.get("call_budget"),
+            columns[13]: bo_outcome.get("dimensions"),
+            columns[14]: bo_outcome.get("local_identity_probe_count"),
+            columns[15]: bo_outcome.get("global_search_calls"),
         })
 
         # Append the filtered row

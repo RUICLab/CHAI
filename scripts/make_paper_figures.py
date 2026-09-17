@@ -85,9 +85,9 @@ def _save(fig, name, out, pdf_pages):
 def fig_rate_and_repeats(data, out, pdf_pages):
     """Full-width two-panel: pooled rate, and the per-repeat values behind it.
 
-    One measure, two views: (a) is the claim, (b) is the evidence that (a) is
-    not a single lucky sample. Putting them side by side stops a reader taking
-    the pooled bar on trust.
+    This accepted-artifact measure tests whether enforcement prevents a bad
+    label from shipping. It does not measure how often the underlying model
+    originated bad labels before control-plane pruning.
     """
     pooled = data["pooled"]
     ar = data["apps"]["ar-iclib"]
@@ -123,7 +123,7 @@ def fig_rate_and_repeats(data, out, pdf_pages):
     ax1.set_yticklabels([r[0] for r in rows], fontsize=7.2)
     ax1.set_xlim(0, 0.80)
     ax1.set_xticks([0, 0.2, 0.4, 0.6])
-    ax1.set_xlabel("False operator labels per accepted plan")
+    ax1.set_xlabel("Unsupported labels shipped per accepted plan")
     ax1.set_title("(a)  pooled over 6 benchmarks", loc="left", fontsize=8,
                   color=INK_2, pad=6)
     ax1.grid(axis="x", color=RULE, lw=0.5, alpha=0.8)
@@ -162,7 +162,7 @@ def fig_rate_and_repeats(data, out, pdf_pages):
                         fontweight="bold")
     ax2.set_xlim(-0.4, 5.0)
     ax2.set_xticks(range(0, 6))
-    ax2.set_xlabel("False labels per repeat")
+    ax2.set_xlabel("Unsupported labels shipped per repeat")
     ax2.set_title("(b)  ar-iclib, each of 3 repeats", loc="left", fontsize=8,
                   color=INK_2, pad=6)
     ax2.grid(axis="x", color=RULE, lw=0.5, alpha=0.8)

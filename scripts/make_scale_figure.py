@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Figure: false operator provenance survives a model-scale change.
+"""Figure: enforcement prevents unsupported operator labels from shipping.
 
     python3 scripts/make_scale_figure.py
 
 The obvious objection to the plan-quality result is that it only measures a
-small model being sloppy. This figure answers that directly: a 7B and a
-frontier model, same benchmark, same arms, same repeats. The unenforced arms
-mislabel their operators at both scales; the enforced arms reach zero at both.
+small model being sloppy. A 7B and a frontier model are compared on the same
+benchmark, arms, and repeats. Both models emit unsupported labels during
+generation; this accepted-artifact view shows that unenforced arms ship some,
+whereas the control plane catches or removes them before acceptance.
 """
 
 import json
@@ -90,7 +91,7 @@ def main():
 
     ax.set_xticks(x)
     ax.set_xticklabels([f"{a[1]}\n{a[2]}" for a in ARMS], fontsize=7.4)
-    ax.set_ylabel("False operator labels\nper accepted plan")
+    ax.set_ylabel("Unsupported labels shipped\nper accepted plan")
     ax.set_ylim(0, 0.63)
     ax.grid(axis="y", color=RULE, lw=0.5, alpha=0.8)
     ax.set_axisbelow(True)

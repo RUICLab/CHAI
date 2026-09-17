@@ -1,6 +1,8 @@
 from utils.operator_conformance import (
+    nonconforming_operator_ids,
     nonconforming_added_operator_ids,
     prune_unimplemented_added_operator_claims,
+    prune_unimplemented_operator_claims,
     repair_operator_candidate,
     validate_hardware_operator_conformance,
     validate_operator_conformance,
@@ -68,6 +70,159 @@ def test_base_operators_require_their_declared_structure():
     assert validate_operator_conformance(perforated, {1}) == ""
 
 
+def test_t3_recognises_keyed_reuse_by_dataflow_not_variable_names():
+    keyed_reuse = """
+    static const char *remembered_pattern;
+    static int jump_values[256];
+    void prepare(const char *incoming) {
+      /*Knob Variables Declaration Start*/
+      int enable_reuse = 1;
+      /*Knob Variables Declaration End*/
+      if (enable_reuse && remembered_pattern == incoming) return;
+      int width = strlen(incoming);
+      for (int i = 0; i < 256; ++i) jump_values[i] = width;
+      remembered_pattern = (const char *)incoming;
+    }
+    """
+
+    assert validate_operator_conformance(keyed_reuse, {3}) == ""
+
+    # Alpha-renaming every semantic object must not change the verdict.
+    renamed = (keyed_reuse
+        .replace("remembered_pattern", "xq")
+        .replace("incoming", "zz")
+        .replace("jump_values", "a7")
+        .replace("enable_reuse", "k9"))
+    assert validate_operator_conformance(renamed, {3}) == ""
+
+
+def test_t3_rejects_cache_words_without_a_real_hit_and_miss_path():
+    keyword_only = """
+    int f(int input) {
+      /*Knob Variables Declaration Start*/
+      int use_cache = 1;
+      /*Knob Variables Declaration End*/
+      int cache = input;
+      if (use_cache) return cache;
+      return input;
+    }
+    """
+
+    assert "T3 requires" in validate_operator_conformance(keyword_only, {3})
+
+
+def test_t3_rejects_a_hit_branch_that_recomputes_before_returning():
+    """Duplicating the full computation in both branches is not exact reuse."""
+    duplicated_search = """
+    int search(const char *input) {
+      /*Knob Variables Declaration Start*/
+      int reuse_enabled = 1;
+      /*Knob Variables Declaration End*/
+      static const char *saved_key;
+      static int saved_len;
+      if (reuse_enabled && saved_key == input && saved_len == width) {
+        for (int i = 0; i < width; ++i) inspect(input[i]);
+        return 0;
+      } else {
+        saved_key = input;
+        saved_len = width;
+        for (int i = 0; i < width; ++i) inspect(input[i]);
+        return 0;
+      }
+    }
+    """
+
+    assert "T3 requires" in validate_operator_conformance(duplicated_search, {3})
+
+
+def test_t3_and_t13_have_distinct_structural_contracts():
+    previous_result = """
+    int smooth(int input) {
+      /*Knob Variables Declaration Start*/
+      int refresh_every = 2;
+      /*Knob Variables Declaration End*/
+      static int tick = 0;
+      static int retained = 0;
+      if ((tick++ % refresh_every) == 0) {
+        retained = expensive(input);
+      }
+      emit(retained);
+      return retained;
+    }
+    """
+
+    assert validate_operator_conformance(previous_result, {13}) == ""
+    assert "T3 requires" in validate_operator_conformance(previous_result, {3})
+
+    keyed_reuse = """
+    static const void *a;
+    void f(const void *b) {
+      /*Knob Variables Declaration Start*/
+      int k = 1;
+      /*Knob Variables Declaration End*/
+      if (k && a == b) return;
+      recompute(b);
+      a = b;
+    }
+    """
+    assert validate_operator_conformance(keyed_reuse, {3}) == ""
+    assert "T13 requires" in validate_operator_conformance(keyed_reuse, {13})
+
+
+def test_t5_and_t19_do_not_depend_on_magic_identifier_names():
+    compact_membership = """
+    int maybe_present(unsigned value) {
+      /*Knob Variables Declaration Start*/
+      unsigned k1 = 63;
+      /*Knob Variables Declaration End*/
+      static unsigned char q7[8];
+      unsigned z9 = value % k1;
+      return q7[z9 >> 3] & (1u << (z9 & 7));
+    }
+    """
+    assert validate_operator_conformance(compact_membership, {5}) == ""
+
+    surrogate = """
+    int rootish(unsigned value) {
+      /*Knob Variables Declaration Start*/
+      int k2 = 0;
+      /*Knob Variables Declaration End*/
+      if (k2) {
+        return (value + 1) >> 1;
+      } else {
+        return expensive_root(value);
+      }
+    }
+    """
+    assert validate_operator_conformance(surrogate, {19}) == ""
+
+    labels_only = """
+    int f(int x) {
+      /*Knob Variables Declaration Start*/
+      int surrogate_mode = 1;
+      /*Knob Variables Declaration End*/
+      if (surrogate_mode) return x;
+      return x;
+    }
+    """
+    assert "T19 requires" in validate_operator_conformance(labels_only, {19})
+
+
+def test_t6_probability_check_is_alpha_rename_invariant():
+    code = """
+    void f(void) {
+      /*Knob Variables Declaration Start*/
+      unsigned k3 = 2;
+      /*Knob Variables Declaration End*/
+      unsigned q8 = source_state;
+      q8 = (q8 >> 1) ^ (-(q8 & 1u) & 0xB400u);
+      if ((q8 % k3) == 0) output = work();
+    }
+    """
+
+    assert validate_hardware_operator_conformance(code, {6}, _msp430_profile()) == ""
+
+
 def test_t2_rejects_float_scaling_and_accepts_fixed_point():
     """Multiplying a float result by a knob is value scaling, not precision."""
     float_scaling = """
@@ -122,6 +277,20 @@ def test_knob_taint_follows_one_level_of_indirection():
     }
     """
     assert "T1 requires" in validate_operator_conformance(unrelated, {1})
+
+
+def test_loop_conformance_handles_casts_and_unbraced_bodies():
+    code = """
+    void f(unsigned n) {
+      /*Knob Variables Declaration Start*/
+      int iteration_pct = 100;
+      /*Knob Variables Declaration End*/
+      int limit = (n * iteration_pct) / 100;
+      for (unsigned i = 0; i < (unsigned)limit; ++i) work(i);
+    }
+    """
+
+    assert validate_operator_conformance(code, {1}) == ""
 
 
 def test_no_fpu_target_rejects_floating_point_knobs():
@@ -191,22 +360,63 @@ def test_only_false_operator_claim_is_left_for_rejection():
     assert candidate["technique_numbers"] == [21]
 
 
+def test_false_base_claim_is_pruned_when_a_real_operator_remains():
+    candidate = {
+        "completeFunction": """
+        void f(int *data, int n) {
+          /*Knob Variables Declaration Start*/
+          int iteration_pct = 100;
+          /*Knob Variables Declaration End*/
+          int limit = (n * iteration_pct) / 100;
+          for (int i = 0; i < limit; ++i) data[i] += 1;
+        }
+        """,
+        "technique_numbers": [1, 13],
+    }
+
+    retained, actions = prune_unimplemented_operator_claims(candidate, {1, 13})
+
+    assert retained == {1}
+    assert candidate["technique_numbers"] == [1]
+    assert actions == ["discarded unimplemented operator claim(s): T13"]
+
+
+def test_all_false_claims_are_left_for_normal_rejection():
+    candidate = {
+        "completeFunction": "int f(void) { return 0; }",
+        "technique_numbers": [13, 21],
+    }
+
+    retained, actions = prune_unimplemented_operator_claims(candidate, {13, 21})
+
+    assert retained == {13, 21}
+    assert actions == []
+
+
+def test_raw_claim_measurement_covers_base_and_added_catalogues():
+    code = "int f(void) { return 0; }"
+
+    assert nonconforming_operator_ids(code, {13, 21}) == {13, 21}
+
+
 def _msp430_profile():
     return HardwareProfile("MSP430", 10, False, False, 5, 16)
 
 
-def test_no_fpu_t2_rejects_floating_output_scaling():
+def test_no_fpu_t2_does_not_require_a_magic_knob_name():
     code = """
-    void sobel(void) {
-      double precision_scale = 0.8;
-      double pixel_value = convolution();
-      output = pixel_value * precision_scale;
+    void quantize(unsigned *output, unsigned value) {
+      /*Knob Variables Declaration Start*/
+      int quant_shift = 0;
+      /*Knob Variables Declaration End*/
+      *output = value >> quant_shift;
     }
     """
 
-    error = validate_hardware_operator_conformance(code, {2}, _msp430_profile())
-
-    assert "integer/fixed-point" in error
+    assert validate_operator_conformance(code, {2}) == ""
+    assert validate_hardware_operator_conformance(
+        code, {2}, _msp430_profile()
+    ) == ""
 
 
 def test_no_fpu_t2_accepts_knob_controlled_fixed_point_path():
@@ -231,7 +441,9 @@ def test_t6_requires_real_probability_logic():
     mislabeled = "void f(void) { output = input * 0.8; }"
     implemented = """
     void f(void) {
+      /*Knob Variables Declaration Start*/
       int sample_rate = 2;
+      /*Knob Variables Declaration End*/
       unsigned lfsr = seed;
       lfsr = (lfsr >> 1) ^ (-(lfsr & 1u) & 0xB400u);
       if ((lfsr % sample_rate) == 0) output = work();

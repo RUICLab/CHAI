@@ -1,0 +1,10 @@
+{
+  "app": "lqi-iclib",
+  "selection_policy": "reachable source-defined computational functions; exclude main, I/O, and unreachable code",
+  "target_functions": {
+    "calculateDeliveryRatio": "approximate",
+    "reverseArray": "do not approximate",
+    "main": "do not approximate"
+  },
+  "code_summary": "Link-quality benchmark. calculateDeliveryRatio scans one packet trace, counts packets, accumulates delivered weight, and returns the ratio. reverseArray is unreachable dead code and main is the frozen benchmark driver."
+}

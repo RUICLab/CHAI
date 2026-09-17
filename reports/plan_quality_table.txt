@@ -56,7 +56,7 @@ stringsearch-iclib
 ========================================================================================================
 POOLED ACROSS ALL BENCHMARKS AND REPEATS
 ========================================================================================================
-  arm                                       cells   plans   HW-infeasible   false provenance
+  arm                                       cells   plans   HW-infeasible   unsupported shipped
   --------------------------------------------------------------------------------------------
   A  CheckMate T1-T20, no control plane         6      26               0                 13
   B  CheckMate+10 T1-T30, no control plane      4      20               1                 10
@@ -71,8 +71,10 @@ READING THIS TABLE
   before the model ever sees them, so a non-zero count in an arm with
   the control plane ON would be a defect, not a design choice.
 
-  false provenance is a LOWER BOUND from a static + behavioural
-  checker; it cannot prove a transformation is genuinely present.
+  unsupported labels shipped is a LOWER BOUND from a static + behavioural
+  checker; it cannot prove a transformation is genuinely present. CHAI prunes
+  labels before accepted artifacts are written, so its zero is an enforcement
+  outcome. This older run did not measure raw pre-pruning model errors.
 
   menus = 1 means every function was offered the identical operator
   list. Greater than 1 means the plan was specialised per function.

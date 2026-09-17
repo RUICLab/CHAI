@@ -43,6 +43,7 @@ from config.globals import (
     APPROXIMATION_FORMAT_EXAMPLES,
     CHAT_HISTORY,
     CODE_BASE_SUMMARY,
+    ENTITIES,
 )
 
 
@@ -54,6 +55,7 @@ def _full_parent_context_enabled():
 
 #: Maximum characters of a parent's approximated code to carry forward.
 PARENT_CODE_BUDGET = int(os.getenv("CHAI_PARENT_CODE_BUDGET", "1200"))
+CALLSITE_CONTEXT_BUDGET = int(os.getenv("CHAI_CALLSITE_CONTEXT_BUDGET", "3000"))
 
 
 def summarize_parent_contribution(function_name, messages):
@@ -111,6 +113,147 @@ def summarize_parent_contribution(function_name, messages):
     ]
 
 
+def summarize_direct_callsites(function_name, entities, lines_before=12, lines_after=8):
+    """Return bounded source snippets for direct callers of *function_name*.
+
+    Reuse opportunities are properties of calls, not just callees. The old
+    context showed ``init_search`` in isolation, so the selector confidently
+    (and falsely) said it was called once even though ``main`` invokes it in a
+    nested loop. These snippets are source evidence shared by every arm.
+    """
+    snippets = []
+    call = re.compile(rf"\b{re.escape(function_name)}\s*\(")
+    for entity in entities or []:
+        if not isinstance(entity, dict):
+            continue
+        caller = entity.get("functionName")
+        code = str(entity.get("completeFunction", "") or "")
+        if not caller or caller == function_name or not code:
+            continue
+        lines = code.splitlines()
+        hit_lines = [
+            index for index, line in enumerate(lines) if call.search(line)
+        ]
+        for index in hit_lines[:2]:
+            start = max(0, index - lines_before)
+            end = min(len(lines), index + lines_after + 1)
+            snippets.append(
+                f"Direct caller `{caller}` around line {index + 1}:\n"
+                "```c\n" + "\n".join(lines[start:end]) + "\n```"
+            )
+    if not snippets:
+        return []
+    text = (
+        f"SOURCE CALL-SITE CONTEXT FOR `{function_name}`\n"
+        "Use these real call sites when judging reuse, loop invariance, and "
+        "argument stability. Do not assume a call count absent from source.\n\n"
+        + "\n\n".join(snippets)
+    )
+    return [("human", text[:CALLSITE_CONTEXT_BUDGET])]
+
+
+def _balanced_end(code, opening, left, right):
+    depth = 0
+    for position in range(opening, len(code)):
+        if code[position] == left:
+            depth += 1
+        elif code[position] == right:
+            depth -= 1
+            if depth == 0:
+                return position
+    return len(code) - 1
+
+
+def _for_regions(code):
+    """Return ``(body_start, body_end, induction_variable)`` regions."""
+    regions = []
+    for match in re.finditer(r"\bfor\s*\(", code):
+        opening = code.find("(", match.start())
+        close = _balanced_end(code, opening, "(", ")")
+        header = code[opening + 1:close]
+        induction = re.search(
+            r"(?:^|;)\s*(?:[A-Za-z_]\w*[\s*]+)*([A-Za-z_]\w*)\s*=",
+            header,
+        )
+        variable = induction.group(1) if induction else None
+        body_start = close + 1
+        while body_start < len(code) and code[body_start].isspace():
+            body_start += 1
+        if body_start < len(code) and code[body_start] == "{":
+            body_end = _balanced_end(code, body_start, "{", "}")
+        else:
+            semicolon = code.find(";", body_start)
+            body_end = len(code) if semicolon == -1 else semicolon
+        regions.append((body_start, body_end, variable))
+    return regions
+
+
+def loop_invariant_callsite_evidence(function_name, entities):
+    """Describe direct calls whose arguments are invariant in an enclosing loop.
+
+    This is a candidate detector, not a semantic proof. Identity and behavioral
+    gates still decide whether a generated T3 implementation is safe.
+    """
+    callee = next(
+        (
+            str(entity.get("completeFunction", "") or "")
+            for entity in entities or []
+            if isinstance(entity, dict) and entity.get("functionName") == function_name
+        ),
+        "",
+    )
+    callee_body = callee[callee.find("{") + 1:] if "{" in callee else ""
+    if not re.search(r"\b(?:for|while)\s*\(|\b[A-Za-z_]\w*\s*\(", callee_body):
+        return []
+
+    evidence = []
+    call_pattern = re.compile(rf"\b{re.escape(function_name)}\s*\(")
+    for entity in entities or []:
+        if not isinstance(entity, dict) or entity.get("functionName") == function_name:
+            continue
+        caller = entity.get("functionName")
+        code = str(entity.get("completeFunction", "") or "")
+        regions = _for_regions(code)
+        for call in call_pattern.finditer(code):
+            opening = code.find("(", call.start())
+            close = _balanced_end(code, opening, "(", ")")
+            arguments = code[opening + 1:close]
+            enclosing = [
+                region for region in regions if region[0] <= call.start() <= region[1]
+            ]
+            # Smallest body is the innermost loop.
+            enclosing.sort(key=lambda region: region[1] - region[0])
+            # Only the innermost loop establishes consecutive equal-key calls.
+            # Invariance merely in an outer loop is insufficient: an inner
+            # loop may change the key or global state between two calls.
+            if enclosing:
+                _start, _end, variable = enclosing[0]
+                if variable and not re.search(rf"\b{re.escape(variable)}\b", arguments):
+                    evidence.append(
+                        f"{caller} calls {function_name}({arguments.strip()}) inside "
+                        f"its innermost loop over {variable}, but the arguments do not depend on {variable}"
+                    )
+    return evidence
+
+
+def enforce_callsite_operator_requirements(candidate_ids, function_name, entities):
+    """Remove call-site-only operators when their required evidence is absent.
+
+    The selector prompt tells the model that T3 cannot be inferred from a
+    callee body alone, but a model still selected it for ``strsearch`` and the
+    generated implementation duplicated the full search in both branches.
+    Candidate narrowing is a control-plane decision, so enforce that rule here
+    before planning rather than hoping the model follows prose.
+    """
+    selected = set(candidate_ids or [])
+    t3_evidence = loop_invariant_callsite_evidence(function_name, entities)
+    removed = set()
+    if 3 in selected and not t3_evidence:
+        selected.remove(3)
+        removed.add(3)
+    return selected, removed, t3_evidence
+
+
 def manufacturerContext(PDG, this_function): #Cat 6
 
     global APPROXIMATION_FORMAT_EXAMPLES
@@ -131,6 +274,8 @@ def manufacturerContext(PDG, this_function): #Cat 6
         this_context += APPROXIMATION_FORMAT_EXAMPLES
     if CODE_BASE_SUMMARY != []:
         this_context += CODE_BASE_SUMMARY
+
+    this_context += summarize_direct_callsites(this_function, ENTITIES)
 
     this_context += parent_context
 

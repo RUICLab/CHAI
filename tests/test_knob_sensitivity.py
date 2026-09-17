@@ -13,6 +13,7 @@ from utils.knob_sensitivity import (
     _declared_value,
     _probe_value,
     _set_knob_in_source,
+    requires_output_sensitivity,
     verify_knobs_have_effect,
 )
 
@@ -47,6 +48,13 @@ def test_probe_value_picks_the_end_furthest_from_identity():
     assert _probe_value([0, 100], 100) == 0
     assert _probe_value([0, 100], 0) == 100
     assert _probe_value([50, 100], 100) == 50
+
+
+def test_exact_t3_does_not_require_output_change_but_mixed_plans_do():
+    assert not requires_output_sensitivity({3})
+    assert requires_output_sensitivity({1})
+    assert requires_output_sensitivity({3, 21})
+    assert requires_output_sensitivity(set())
 
 
 def test_declared_value_reads_the_knob_block(tmp_path):

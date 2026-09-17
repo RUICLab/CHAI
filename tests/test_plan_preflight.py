@@ -67,7 +67,7 @@ def test_fixed_local_value_is_removed_from_tunable_metadata():
     assert steps == []
 
 
-def test_source_target_filter_removes_library_and_pdg_only_nodes():
+def test_source_target_filter_removes_pdg_only_nodes():
     targets = {"worker": "approximate", "cexp": "approximate", "helper": "do not approximate"}
     topology = ["cexp", "worker", "helper"]
     entities = [{"functionName": "worker", "completeFunction": "void worker(void) {}"}]
@@ -77,11 +77,11 @@ def test_source_target_filter_removes_library_and_pdg_only_nodes():
     assert selected == ["worker"]
     assert rejected == [{
         "function": "cexp",
-        "reason": "library-like support function (not an application kernel)",
+        "reason": "no extracted source definition (external/library/PDG-only node)",
     }]
 
 
-def test_source_target_filter_excludes_local_libm_standins():
+def test_source_target_filter_keeps_local_computational_definitions():
     targets = {"fft_radix2": "approximate", "cos": "approximate"}
     topology = ["cos", "fft_radix2"]
     entities = [
@@ -91,11 +91,8 @@ def test_source_target_filter_excludes_local_libm_standins():
 
     selected, rejected = filterSourceTargets(targets, topology, entities)
 
-    assert selected == ["fft_radix2"]
-    assert rejected == [{
-        "function": "cos",
-        "reason": "library-like support function (not an application kernel)",
-    }]
+    assert selected == ["cos", "fft_radix2"]
+    assert rejected == []
 
 
 def test_source_recovery_handles_complex_return_type_and_nested_braces(tmp_path):

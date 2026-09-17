@@ -13,18 +13,30 @@ analyzer = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(analyzer)
 
 
-def _cell(tmp_path, plans, violation_attempts=0):
+def _cell(tmp_path, plans, violation_attempts=0, raw_false=None, removed=None,
+          raw_checked=None, candidates_checked=None):
     logs = tmp_path / "logs"
     outputs = tmp_path / "outputs"
     logs.mkdir(parents=True)
     outputs.mkdir(parents=True)
     (tmp_path / "status.json").write_text(json.dumps({"exit_code": 0}))
-    (logs / "experiment_metrics_app_MSP430_chai.json").write_text(json.dumps({
+    metrics = {
         "run_outcome": "valid_plan_generated",
         "operator_conformance_violation_count": violation_attempts,
         "functions_attempted": len(plans),
         "functions_succeeded": len(plans),
-    }))
+    }
+    if raw_false is not None:
+        metrics["raw_operator_claim_violation_count"] = raw_false
+    if raw_checked is not None:
+        metrics["raw_operator_claims_checked"] = raw_checked
+    if candidates_checked is not None:
+        metrics["raw_operator_candidates_checked"] = candidates_checked
+    if removed is not None:
+        metrics["removed_operator_claim_count"] = removed
+    (logs / "experiment_metrics_app_MSP430_chai.json").write_text(
+        json.dumps(metrics)
+    )
     (outputs / "accepted_approximation_plans_app_MSP430_chai.json").write_text(
         json.dumps({"plans": plans})
     )
@@ -71,6 +83,52 @@ def test_missing_accepted_artifact_reports_none_not_zero(tmp_path):
     logs.mkdir(parents=True)
     (tmp_path / "status.json").write_text(json.dumps({"exit_code": 0}))
     assert analyzer._final_provenance(str(tmp_path)) is None
+
+
+def test_analyzer_keeps_raw_removed_and_shipped_claims_distinct(tmp_path):
+    honest_plan = [{
+        "functionName": "solve",
+        "technique_numbers": [21],
+        "completeFunction": GENUINE,
+    }]
+    cell_dir = _cell(
+        tmp_path, honest_plan, raw_false=6, removed=4,
+        raw_checked=20, candidates_checked=8,
+    )
+
+    cell = analyzer.read_cell(str(cell_dir))
+
+    assert cell["raw_false_claims"] == 6
+    assert cell["raw_claims_checked"] == 20
+    assert cell["raw_candidates_checked"] == 8
+    assert cell["removed_false_claims"] == 4
+    assert cell["final_provenance"]["false_claims_in_final_plan"] == 0
+
+
+def test_old_campaign_does_not_render_missing_raw_measurement_as_zero(tmp_path):
+    cell_dir = _cell(tmp_path, [], violation_attempts=7)
+
+    cell = analyzer.read_cell(str(cell_dir))
+
+    assert cell["raw_false_claims"] is None
+    assert cell["removed_false_claims"] is None
+
+
+def test_analyzer_reads_optimizer_budget_split(tmp_path):
+    cell_dir = _cell(tmp_path, [])
+    (cell_dir / "logs" / "best_knobs_app.csv").write_text(
+        "knobs_list,error,power_cycles,original_power_cycles,"
+        "power_cycle_ratio,optimization_metric,bo_outcome,identity_verified,"
+        "bo_call_budget,bo_dimensions,local_identity_probes,global_search_calls\n"
+        '"[]",0,19,19,1,1,baseline_selected,True,40,10,4,35\n'
+    )
+
+    cell = analyzer.read_cell(str(cell_dir))
+
+    assert cell["bo_call_budget"] == 40
+    assert cell["bo_dimensions"] == 10
+    assert cell["local_identity_probes"] == 4
+    assert cell["global_search_calls"] == 35
 
 
 GENUINE = """void solve(int n) {

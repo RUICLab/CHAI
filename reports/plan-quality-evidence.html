@@ -248,7 +248,7 @@
   <div class="scroll">
   <table>
     <thead><tr><th>Arm</th><th class="n">Plans accepted</th><th class="n">HW-infeasible</th>
-      <th class="n">False provenance</th><th class="n">Distinct menus</th></tr></thead>
+      <th class="n">Unsupported labels shipped</th><th class="n">Distinct menus</th></tr></thead>
     <tbody>
       <tr><td class="arm"><span class="k">A</span>CheckMate T1–T20</td><td class="n">8 [7–8]</td>
         <td class="n"><span class="v zero">0</span></td><td class="n"><span class="v hit">3 [3–4]</span></td><td class="n"><span class="v hit">1</span></td></tr>
@@ -261,20 +261,22 @@
     </tbody>
   </table>
   </div>
-  <p class="note">Both CHAI arms carried zero false provenance in every one of three repeats;
-  both baselines carried two to four in every repeat. <b>Arm D matters most for the claim</b>
-  — it uses the original T1–T20 catalogue, so its result is the control plane alone.</p>
+  <p class="note">Both CHAI arms shipped zero statically disproven labels in every repeat;
+  both baselines shipped two to four. <b>Arm D isolates the mechanism</b>: it uses the
+  original T1–T20 catalogue, so the result is enforcement rather than the added operators.
+  It does not show that CHAI's underlying planner originated fewer bad labels.</p>
 </section>
 
 <section>
   <span class="eyebrow">Pooled · all benchmarks, all repeats</span>
   <h2>Rate, not count — CHAI accepts fewer plans</h2>
   <p>The counts are not comparable on their own: the enforced arms accept roughly half as
-  many plans, so zero false claims is partly selection. Per accepted plan is the fair figure,
-  and the gap survives it.</p>
+  many plans, so zero shipped claims is partly selection and partly pre-write pruning. Per
+  accepted plan is still useful for the operational question—what reached the artifact—but
+  it is not a comparison of raw planner error rates.</p>
   <div class="scroll">
   <table>
-    <thead><tr><th>Arm</th><th class="n">Plans accepted</th><th class="n">False provenance</th>
+    <thead><tr><th>Arm</th><th class="n">Plans accepted</th><th class="n">Unsupported labels shipped</th>
       <th class="n">Per plan</th><th class="n">HW-infeasible</th></tr></thead>
     <tbody>
       <tr><td class="arm"><span class="k">A</span>CheckMate T1–T20</td><td class="n">26</td>
@@ -288,9 +290,10 @@
     </tbody>
   </table>
   </div>
-  <p class="note">Half of every plan the unenforced arms accepted contained an operator label
-  the code does not implement. Whether the surviving CHAI plans are also <em>better performing</em>
-  is a different question, and one this sweep did not ask.</p>
+  <p class="note">The unenforced accepted artifacts contained operator labels the code did
+  not implement; CHAI's accepted artifacts did not because the control plane checks and
+  removes them first. These older runs cannot compare raw model mislabelling because that
+  pre-pruning counter had not yet been recorded.</p>
 </section>
 
 <section>

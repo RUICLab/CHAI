@@ -14,6 +14,24 @@ from utils.source_functions import (
 )
 
 
+# Deliberately distinctive identifiers in out-of-suite few-shot examples.
+# Their presence in generated benchmark code is direct evidence that the model
+# copied a demonstration instead of adapting the transformation to the source.
+_FEWSHOT_SENTINEL_IDENTIFIERS = {
+    "DemoT3FilterSpec",
+    "demo_t3_coefficients",
+    "demo_t3_configured_spec",
+    "demo_t3_compile_coefficient",
+    "demo_t3_configure_filter",
+}
+
+
+def find_fewshot_identifier_leakage(code):
+    """Return sorted demonstration-only identifiers copied into *code*."""
+    tokens = set(re.findall(r"\b[A-Za-z_]\w*\b", code or ""))
+    return sorted(tokens & _FEWSHOT_SENTINEL_IDENTIFIERS)
+
+
 def _knob_declaration_pattern(knob):
     return re.compile(
         rf"^(?P<prefix>\s*(?:(?:const|volatile|static|register|unsigned|signed|long|short)\s+)*"
@@ -272,6 +290,40 @@ def _dedupe_knob_declarations(function_dict):
     return actions
 
 
+def _remove_uninitialized_shadow_declarations(code, names):
+    """Remove safe local redeclarations of state the original function writes.
+
+    Models often copy file-scope state into the replacement function as
+    uninitialized ``static`` locals. That changes which object consumers read,
+    so the ABI/state contract correctly rejects it. When the declaration has
+    no initializer, removing it is a semantics-preserving repair: references
+    resolve to the original file-scope object again. Initialized declarations
+    are left untouched because deleting their initializer could hide work.
+    """
+    if not names:
+        return code, []
+    removed = []
+    kept = []
+    for line in code.splitlines():
+        matched = None
+        for name in names:
+            declaration = re.match(
+                rf"^\s*(?:(?:const|volatile|static|register|unsigned|signed|long|short)\s+)*"
+                rf"[A-Za-z_]\w*(?:\s*\*+\s*|\s+)"
+                rf"{re.escape(name)}\s*(?:\[[^]]*\])?\s*;\s*"
+                rf"(?:/\*.*\*/\s*|//.*)?$",
+                line,
+            )
+            if declaration:
+                matched = name
+                break
+        if matched:
+            removed.append(matched)
+        else:
+            kept.append(line)
+    return "\n".join(kept), sorted(set(removed))
+
+
 #: Knob-name tokens whose identity setting is "off" / zero.
 _ZERO_IDENTITY_TOKENS = (
     "enabled", "enable_", "_enable", "disable", "shift_bits", "shift_amount",
@@ -479,6 +531,16 @@ def repairFunctionCandidate(functionDict):
         ):
             code = f"{original_signature}\n{{\n{stripped}\n}}"
             actions.append("wrapped body-only candidate with original function")
+
+    shadowed = _shadowed_written_state(original_function, code)
+    code, removed_shadows = _remove_uninitialized_shadow_declarations(
+        code, shadowed
+    )
+    if removed_shadows:
+        actions.append(
+            "removed local redeclaration(s) shadowing original file-scope state: "
+            + ", ".join(removed_shadows)
+        )
 
     prototypes = _helper_prototypes(code, function_name)
     if prototypes:

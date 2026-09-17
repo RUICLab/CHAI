@@ -2,8 +2,10 @@ from utils.utils import findFileOfFunc
 from utils import validator
 from utils.validator import (
     buildFocusedRepairRequest,
+    find_fewshot_identifier_leakage,
     normalizeKnobDeclarations,
     repairFunctionCandidate,
+    validateFunctionContract,
 )
 
 
@@ -23,6 +25,73 @@ def _source_workspace(tmp_path, monkeypatch, source):
     (target / "main.c").write_text(source, encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(validator, "TARGET_FILES", ["main.c"])
+
+
+def test_demo_only_identifiers_are_rejected_before_compilation():
+    copied = """
+    void init_search(const char *pattern) {
+      demo_t3_configured_spec = pattern;
+      demo_t3_compile_coefficient(pattern, 0);
+    }
+    """
+    adapted = """
+    void init_search(const char *pattern) {
+      findme = pattern;
+      table[0] = strlen(pattern);
+    }
+    """
+
+    assert find_fewshot_identifier_leakage(copied) == [
+        "demo_t3_compile_coefficient", "demo_t3_configured_spec"
+    ]
+    assert find_fewshot_identifier_leakage(adapted) == []
+
+
+def test_uninitialized_shadows_of_original_state_are_removed(tmp_path, monkeypatch):
+    _source_workspace(
+        tmp_path,
+        monkeypatch,
+        """
+        static size_t table[256];
+        static size_t len;
+        static char *findme;
+        void init_search(const char *string) {
+          size_t i;
+          len = strlen(string);
+          for (i=0; i<256; ++i) table[i] = len;
+          findme = (char *)string;
+        }
+        """,
+    )
+    candidate = _plan(
+        """
+        void init_search(const char *string) {
+          /*Knob Variables Declaration Start*/
+          int exact_reuse_enabled = 0;
+          /*Knob Variables Declaration End*/
+          static size_t table[256];
+          static size_t len;
+          static char *findme;
+          static const char *remembered;
+          if (exact_reuse_enabled && remembered == string) return;
+          len = strlen(string);
+          for (size_t i=0; i<256; ++i) table[i] = len;
+          findme = (char *)string;
+          remembered = string;
+        }
+        """,
+        knobs="['exact_reuse_enabled']",
+        ranges="[{'exact_reuse_enabled': [0, 1]}]",
+        steps="[{'exact_reuse_enabled': 'Integer'}]",
+        name="init_search",
+    )
+
+    actions = repairFunctionCandidate(candidate)
+
+    assert any("shadowing original file-scope state" in action for action in actions)
+    assert "static size_t table[256];" not in candidate["completeFunction"]
+    assert "static const char *remembered;" in candidate["completeFunction"]
+    assert validateFunctionContract(candidate) == ""
 
 
 def test_find_file_falls_back_when_lsp_omits_local_function(tmp_path, monkeypatch):
@@ -185,4 +254,3 @@ def test_focused_repair_contains_original_candidate_error_and_failed_operator(
     assert "return missing(x)" in prompt
     assert "undefined reference" in prompt
     assert "T19" in prompt
-

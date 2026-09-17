@@ -251,9 +251,6 @@ def getFunctionData(list_function_data, toFind): #Cat 4
     return None
 
 
-_LIBRARY_LIKE_SUPPORT_TARGETS = {"sin", "cos", "exp", "cexp"}
-
-
 def filterSourceTargets(target_functions, topological_order, entities):
     """Return selected targets that have an extracted source definition.
 
@@ -272,18 +269,6 @@ def filterSourceTargets(target_functions, topological_order, entities):
     for function in topological_order:
         choice = target_functions.get(function) if isinstance(target_functions, dict) else None
         if str(choice).lower() != "approximate":
-            continue
-        # Some benchmarks ship local stand-ins for libm routines. They have a
-        # source body, but they are support-library implementations rather than
-        # application kernels; treating each as an independent approximation
-        # target both duplicates transformations and lets one bad scalar helper
-        # dominate the whole application. Keep them available as dependencies
-        # while excluding them from the target set.
-        if function in _LIBRARY_LIKE_SUPPORT_TARGETS:
-            rejected.append({
-                "function": function,
-                "reason": "library-like support function (not an application kernel)",
-            })
             continue
         if function not in source_functions:
             rejected.append({

@@ -87,6 +87,60 @@ def test_declining_is_a_valid_answer():
     assert actions == []
 
 
+def test_region_accepts_plural_prose_and_identifier_prefixes():
+    code = """
+    int classify(int move_mean_err, int stat_sd_err) {
+      return move_mean_err < stat_sd_err;
+    }
+    """
+    plan, errors = parse_plan("""
+PLAN:
+- OPERATOR: T21
+  REGION: the move_ and stat_ error computations
+  KNOB: margin | Integer | RANGE [0, 4] | IDENTITY 0
+  BENEFIT: iterations
+  PRECONDITION: errors are nonnegative
+  INVARIANT: returns a valid class
+INTERACTIONS: none
+""", function_code=code)
+
+    assert plan.operator_ids == {21}
+    assert not any("does not appear" in error for error in errors)
+
+
+def test_region_parenthetical_prose_does_not_turn_pass_into_a_callee():
+    text = """PLAN:
+- OPERATOR: T22
+  REGION: the for loop over y and x in the second pass (normalization)
+  KNOB: downsample_factor | Integer | RANGE [1, 4] | IDENTITY 1
+  BENEFIT: iterations
+  PRECONDITION: y_size1 > 2 and x_size1 > 2
+  INVARIANT: skipped image2 pixels are filled from computed anchors
+
+INTERACTIONS: none
+"""
+    function = "void sobel(void) { int x, y; for (y=1;y<9;y++) for (x=1;x<9;x++) image2[y][x]=0; }"
+
+    _plan, errors = parse_plan(text, function_code=function)
+
+    assert not any("does not appear" in error for error in errors)
+
+
+def test_region_still_rejects_a_fabricated_identifier():
+    _plan, errors = parse_plan("""
+PLAN:
+- OPERATOR: T1
+  REGION: the invented_loop_bound loop
+  KNOB: pct | Integer | RANGE [50, 100] | IDENTITY 100
+  BENEFIT: iterations
+  PRECONDITION: n is positive
+  INVARIANT: output remains bounded
+INTERACTIONS: none
+""", function_code="void f(int n) { while (n--) work(); }")
+
+    assert any("invented_loop_bound" in error for error in errors)
+
+
 def test_plan_outside_the_function_operator_contract_is_rejected():
     plan, _errors = parse_plan(WELL_FORMED)
 
