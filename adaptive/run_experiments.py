@@ -83,6 +83,11 @@ def main():
                             reactive=label.startswith("reactive"),
                             server=srv,
                             comms_energy=(comms * 1e-6 if srv else 0.0)))
+                    # float() throughout: these are numpy scalars, which json
+                    # will not serialise.
+                    powered = [a["min_powered_v"] for a in agg
+                               if a["min_powered_v"] is not None]
+                    min_powered_v = float(min(powered)) if powered else None
                     results.append({
                         "benchmark": bench,
                         "scenario": scen_name, "deadline_s": deadline,
@@ -92,6 +97,20 @@ def main():
                         "tasks_per_mJ": float(np.mean([a["tasks_per_mJ"] for a in agg])),
                         "spill_mJ": float(np.mean([a["energy_spilled_mJ"] for a in agg])),
                         "level_mix": np.sum([a["level_mix"] for a in agg], axis=0).tolist(),
+                        # Invariants, recorded per cell so the campaign can be
+                        # audited from the JSON alone rather than re-run.
+                        "mid_task_switches": int(sum(a["mid_task_switches"] for a in agg)),
+                        # decisions is the list of levels chosen, one per
+                        # boundary, so its LENGTH is what must equal periods.
+                        "decisions": int(sum(len(a["decisions"]) for a in agg)),
+                        "periods": int(sum(a["periods"] for a in agg)),
+                        "completed": int(sum(a["completed"] for a in agg)),
+                        "boots": int(sum(a["boots"] for a in agg)),
+                        "min_powered_v": min_powered_v,
+                        "energy_harvested_mJ": float(
+                            np.mean([a["energy_harvested_mJ"] for a in agg])),
+                        "energy_to_load_mJ": float(
+                            np.mean([a["energy_to_load_mJ"] for a in agg])),
                     })
                     print(f"  [{time.time() - started:6.0f}s] {scen_name:<9} "
                           f"d={deadline:>4.0f}s c={comms:>5.0f}uJ  {label:<22}"
