@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 
@@ -119,7 +119,45 @@ def policy_affordable(safety=1.0):
 # ---- forecasters: predict mean available current over the next period -------
 
 def forecast_oracle(history, future, bins_ahead):
+    """Perfect knowledge of the future MEAN CURRENT, not a policy ceiling.
+
+    This is a clairvoyant forecaster: it still passes its perfect input through
+    the same approximate affordability arithmetic as every other predictor, so a
+    fixed policy can legitimately beat it. For an actual upper bound use
+    ``hindsight_level`` below.
+    """
     return float(future[:bins_ahead].mean()) if len(future) else 0.0
+
+
+def hindsight_level(levels, state, avail, k_start, n_period, params,
+                    keep_alive, comms_energy):
+    """The best level this period could have run, judged after the fact.
+
+    Replays the coming period through a copy of the CURRENT capacitor state --
+    so carried-over charge counts -- and returns the most exact level whose task
+    energy actually arrives. One replay settles every level: the device draws
+    the same current until a task completes, so the energy trajectory is shared
+    up to each level's completion point.
+
+    This is a genuine ceiling for a boundary-choosing policy. It is not a global
+    optimum: it never sacrifices this period to bank charge for the next.
+    """
+    clone = replace(state)
+    delivered = 0.0
+    paid = 0.0
+    for j in range(n_period):
+        before = clone.energy_to_load
+        clone.step(avail[k_start + j], k_start + j,
+                   lambda powered: I_ACTIVE, keep_alive=keep_alive)
+        gained = clone.energy_to_load - before
+        if paid < comms_energy:
+            paid += gained
+            gained = 0.0
+        delivered += gained
+    for i, level in enumerate(levels):          # most exact first
+        if level.energy <= delivered:
+            return i
+    return len(levels) - 1
 
 
 def forecast_persistence(history, future, bins_ahead):
@@ -231,7 +269,7 @@ class Server:
 
 def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
              bin_s=1.0, context_bins=64, reactive=False, server=None,
-             comms_energy=0.0):
+             comms_energy=0.0, hindsight=False):
     """Run the selector over a trace and report what the device achieved."""
     dt = params.timestep
     steps_per_period_pre = int(deadline_s / dt)
@@ -261,6 +299,10 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
     period_delivered = 0.0
     comms_paid = 0.0
     warm_level = 0
+    decisions = []            # level chosen at each period boundary
+    period_level = 0
+    mid_task_switches = 0     # must stay 0: levels change only at boundaries
+    min_powered_v = float("inf")
     last_completed = True
     chosen = []
 
@@ -277,15 +319,18 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
             bin_now = k // steps_per_bin
             history = binned[max(0, bin_now - context_bins):bin_now]
             future = binned[bin_now:]
-            if reactive and server is None and k > 0:
+            if hindsight:
+                current = hindsight_level(levels, state, avail, k,
+                                          steps_per_period, params, keep_alive,
+                                          comms_energy)
+            elif reactive and server is None and k > 0:
                 # Start from the last period's outcome, not from a fixed level.
                 # Always restarting at the exact level wastes a tight period
-                # rediscovering that it is unaffordable (45% vs 85% completion
-                # at an 8 s deadline); always restarting where the last period
-                # ended is too pessimistic when energy is plentiful (6x worse
-                # error at 40 s). So: climb one level after a success, back off
-                # one after a miss. The mid-period rule still corrects within
-                # the period.
+                # rediscovering that it is unaffordable; always restarting where
+                # the last period ended is too pessimistic when energy is
+                # plentiful. So: climb one level after a success, back off one
+                # after a miss. Mid-task correction no longer exists, so this
+                # boundary decision is the only adaptation reactive control has.
                 current = (max(0, warm_level - 1) if last_completed
                            else min(len(levels) - 1, warm_level + 1))
             elif server is not None:
@@ -299,6 +344,8 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
                 predicted = usable * mean_rail_voltage(params) * deadline_s
                 current = choose(levels, predicted)
             chosen.append(current)
+            decisions.append(current)
+            period_level = current
             task_energy = 0.0
             warm_level = current
 
@@ -309,6 +356,10 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
             keep_alive=keep_alive)
         step_energy = state.energy_to_load - before_load
         period_delivered += step_energy
+        if on:
+            min_powered_v = min(min_powered_v, state.v)
+        if current != period_level:
+            mid_task_switches += 1
 
         # Mid-task switching is DISABLED. It changed stride or term count
         # partway through a task, kept the work already done, and recorded the
@@ -347,6 +398,10 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         "tasks_per_mJ": (completed / (state.energy_harvested * 1e3)
                          if state.energy_harvested > 0 else 0.0),
         "level_mix": np.bincount(executed, minlength=len(levels)).tolist(),
+        "decisions": decisions,
+        "boots": state.boots,
+        "mid_task_switches": mid_task_switches,
+        "min_powered_v": (None if min_powered_v == float("inf") else min_powered_v),
     }
 
 
@@ -406,6 +461,8 @@ def main():
     policies += [(f"adaptive-{name}", policy_affordable(), fn)
                  for name, fn in FORECASTERS.items()]
     policies += [("reactive (on-device)", policy_fixed(levels[0].name),
+                  forecast_persistence),
+                 ("hindsight (ceiling)", policy_fixed(levels[0].name),
                   forecast_persistence)]
 
     names = args.traces.split(",")
@@ -423,24 +480,22 @@ def main():
         scenarios = [(n, load_trace(f"traces/{n}.csv")) for n in names]
 
     runs = [(label, choose, fn, None) for label, choose, fn in policies]
+    # server+reactive was removed: with mid-task correction gone, a hybrid run
+    # takes the server branch at every boundary and is byte-identical to
+    # server-learned. It measured as a separate policy only while mid-task
+    # switching existed.
     runs += [("server-forecast", policy_affordable(), forecast_ewma, False),
-             ("server-learned", policy_affordable(), forecast_ewma, True),
-             # Hybrid: the server picks the starting level from what it predicts,
-             # then the device still corrects from measured progress. This keeps
-             # the server's wider view without trusting the forecast outright.
-             ("server+reactive", policy_affordable(), forecast_ewma, "hybrid")]
+             ("server-learned", policy_affordable(), forecast_ewma, True)]
 
     rows = []
     for label, choose, forecast, learn in runs:
         agg = []
         for _name, trace in scenarios:
-            hybrid = (learn == "hybrid")
-            srv = (Server(forecast_ewma, learn=True) if hybrid
-                   else Server(forecast_ewma, learn=learn) if learn is not None
-                   else None)
+            srv = Server(forecast_ewma, learn=learn) if learn is not None else None
             agg.append(simulate(trace, levels, params, args.duration,
                                 args.deadline, choose, forecast,
-                                reactive=label.startswith("reactive") or hybrid,
+                                hindsight=label.startswith("hindsight"),
+                                reactive=label.startswith("reactive"),
                                 server=srv,
                                 comms_energy=(args.comms * 1e-6 if srv else 0.0)))
         rows.append((label,
