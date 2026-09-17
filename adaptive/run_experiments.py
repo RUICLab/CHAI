@@ -31,10 +31,15 @@ def policy_set(levels):
     rows += [(f"adaptive-{n}", policy_affordable(), fn, None)
              for n, fn in FORECASTERS.items()]
     rows += [("reactive (on-device)", policy_fixed(levels[0].name),
+              forecast_persistence, None),
+             # Boundary hindsight oracle: the best a policy choosing once per
+             # period could have done, judged after the fact.
+             ("hindsight (boundary oracle)", policy_fixed(levels[0].name),
               forecast_persistence, None)]
+    # server+reactive was dropped: with mid-task correction gone it takes the
+    # server branch at every boundary and is identical to server-learned.
     rows += [("server-forecast", policy_affordable(), forecast_ewma, False),
-             ("server-learned", policy_affordable(), forecast_ewma, True),
-             ("server+reactive", policy_affordable(), forecast_ewma, "hybrid")]
+             ("server-learned", policy_affordable(), forecast_ewma, True)]
     return rows
 
 
@@ -70,14 +75,12 @@ def main():
                         continue          # radio cost only applies to server policies
                     agg = []
                     for _n, trace in scen:
-                        hybrid = (learn == "hybrid")
-                        srv = (Server(forecast_ewma, learn=True) if hybrid
-                               else Server(forecast_ewma, learn=learn) if is_server
-                               else None)
+                        srv = Server(forecast_ewma, learn=learn) if is_server else None
                         agg.append(simulate(
                             trace, levels, params, DURATION, deadline,
                             choose, forecast,
-                            reactive=label.startswith("reactive") or hybrid,
+                            hindsight=label.startswith("hindsight"),
+                            reactive=label.startswith("reactive"),
                             server=srv,
                             comms_energy=(comms * 1e-6 if srv else 0.0)))
                     results.append({

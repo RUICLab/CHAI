@@ -19,8 +19,8 @@ def _trace(n=4000):
     return np.tile(np.array([2.0, 3.2, 1.4, 4.1, 0.9]), n // 5)
 
 
-def _run(choose=None, **kw):
-    return simulate(_trace(), LEVELS, P, duration_s=240.0, deadline_s=30.0,
+def _run(choose=None, deadline_s=30.0, **kw):
+    return simulate(_trace(), LEVELS, P, duration_s=240.0, deadline_s=deadline_s,
                     choose=choose or policy_fixed("L1"),
                     forecast=forecast_persistence, **kw)
 
@@ -71,16 +71,36 @@ def test_selector_power_dynamics_match_the_standalone_power_model():
                    lambda powered: I_ACTIVE, keep_alive=keep)
 
     assert sel["boots"] == state.boots, f"{sel['boots']} vs {state.boots} boots"
+    assert sel["final_v"] == state.v, (
+        f"final voltage {sel['final_v']!r} vs {state.v!r}")
+    assert np.isclose(sel["energy_to_load_mJ"], state.energy_to_load * 1e3,
+                      rtol=0, atol=1e-12)
+    assert np.isclose(sel["energy_harvested_mJ"], state.energy_harvested * 1e3,
+                      rtol=0, atol=1e-12)
 
 
-def test_hindsight_is_a_ceiling_over_every_fixed_level():
-    """A real upper bound must not be beaten by a constant policy."""
-    hind = _run(hindsight=True)
-    for name in ("L0", "L1", "L2"):
-        fixed = _run(choose=policy_fixed(name))
-        assert hind["completion_rate"] >= fixed["completion_rate"] - 1e-9, (
-            f"hindsight {hind['completion']:.2f} < fixed-{name} "
-            f"{fixed['completion']:.2f}")
+def test_hindsight_beats_every_fixed_level_at_each_deadline():
+    """A boundary hindsight oracle must never be beaten, at any deadline, by a
+    policy that picks one level and keeps it.
+
+    Completion first; when completion ties, error decides. The earlier version
+    checked completion on a single deadline, so a hindsight run that met the
+    same deadlines with worse output would have passed.
+    """
+    for deadline in (10.0, 30.0, 60.0):
+        hind = _run(deadline_s=deadline, hindsight=True)
+        for name in ("L0", "L1", "L2"):
+            fixed = _run(deadline_s=deadline, choose=policy_fixed(name))
+            assert hind["completion_rate"] >= fixed["completion_rate"] - 1e-9, (
+                f"deadline {deadline}s: hindsight {hind['completion_rate']:.3f} "
+                f"< fixed-{name} {fixed['completion_rate']:.3f}")
+            if abs(hind["completion_rate"] - fixed["completion_rate"]) < 1e-9:
+                he = hind["mean_error"]
+                fe = fixed["mean_error"]
+                if not (np.isnan(he) or np.isnan(fe)):
+                    assert he <= fe + 1e-9, (
+                        f"deadline {deadline}s: completion ties but hindsight "
+                        f"error {he:.4f} > fixed-{name} {fe:.4f}")
 
 
 def test_level_zero_is_the_declared_identity():

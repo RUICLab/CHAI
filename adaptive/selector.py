@@ -139,8 +139,9 @@ def hindsight_level(levels, state, avail, k_start, n_period, params,
     the same current until a task completes, so the energy trajectory is shared
     up to each level's completion point.
 
-    This is a genuine ceiling for a boundary-choosing policy. It is not a global
-    optimum: it never sacrifices this period to bank charge for the next.
+    This is a BOUNDARY hindsight oracle, not a global ceiling. It maximises each
+    period in isolation, so it can spend charge now that a later period needed
+    and end up completing fewer tasks overall than a more frugal policy.
     """
     clone = replace(state)
     delivered = 0.0
@@ -400,6 +401,8 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         "level_mix": np.bincount(executed, minlength=len(levels)).tolist(),
         "decisions": decisions,
         "boots": state.boots,
+        "final_v": state.v,
+        "energy_to_load_mJ": state.energy_to_load * 1e3,
         "mid_task_switches": mid_task_switches,
         "min_powered_v": (None if min_powered_v == float("inf") else min_powered_v),
     }
@@ -462,7 +465,7 @@ def main():
                  for name, fn in FORECASTERS.items()]
     policies += [("reactive (on-device)", policy_fixed(levels[0].name),
                   forecast_persistence),
-                 ("hindsight (ceiling)", policy_fixed(levels[0].name),
+                 ("hindsight (boundary oracle)", policy_fixed(levels[0].name),
                   forecast_persistence)]
 
     names = args.traces.split(",")
