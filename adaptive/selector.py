@@ -29,24 +29,36 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from adaptive.power_model import PowerParams, load_trace
+from adaptive.power_model import PowerParams, PowerState, hold_until, load_trace
 
 V_RELEASE = 2.283          # measured KEEP_ALIVE release voltage
-REACTIVE_CHECK_STEPS = 10_000      # re-assess every 1 s of simulated time
-REACTIVE_MIN_PROGRESS = 0.30       # ignore the charging-dominated start of a period
-REACTIVE_UPGRADE_MARGIN = 1.20     # hysteresis: only climb back with 20% headroom
+
+def mean_rail_voltage(params: PowerParams) -> float:
+    """Average voltage at which energy actually reaches the MCU.
+
+    Energy is delivered across the whole discharge, from the 3.5 V boot
+    threshold down to the 2.283 V KEEP_ALIVE release -- not at 3.5 V. Valuing it
+    at v_on overestimated the period's budget by ~25% (predicted 17.93 mJ where
+    14.38 mJ arrived), which made L0 look affordable when it was not. Every
+    predicting policy, including the oracle, then over-committed and missed
+    deadlines: the oracle scored 72% where a fixed level scored 100%.
+    """
+    return 0.5 * (params.v_on + V_RELEASE)
 I_ACTIVE = 968.5e-6        # measured mean MCU current while powered [A]
 
 # Canonical Sobel T22 with TWO knobs (min/max scan stride, output stride),
 # RF_2, 68 uF: adaptive/levels.py on sobel_t22_wide.
 #
-# Sampling pass 1 buys savings at exactly zero error, because subsampling still
-# finds the same min/max extremes -- for THIS image. That is image-dependent and
-# should not be assumed to hold generally. The second knob also drops the floor
+# The second knob drops the floor
 # from 23 to 6 cycles, which widens the L1/L2 gap from 22% to 63%: wider than
 # the ~30% forecast error, so prediction can finally tell them apart.
 SOBEL_LEVELS = [
-    {"name": "L0", "stride": "5,1", "error": 0.000, "cycles": 45},
+    # L0 is the plan's DECLARED IDENTITY [1,1] = the original program, 62 cycles.
+    # It is not [5,1]: that configuration also measured 0.000 error, but only on
+    # one image, and sampling the min/max scan is an approximation whose error is
+    # image-dependent. Calling it "exact" claimed a free 27.4% saving that the
+    # data does not support.
+    {"name": "L0", "stride": "1,1", "error": 0.000, "cycles": 62},
     {"name": "L1", "stride": "5,2", "error": 0.019, "cycles": 13},
     {"name": "L2", "stride": "4,4", "error": 0.280, "cycles": 8},
 ]
@@ -197,7 +209,7 @@ class Server:
     def decide(self, levels, history, future, bins_ahead, deadline_s, params):
         mean_current = self.forecast(history, future, bins_ahead)
         usable = max(0.0, mean_current - params.external_icc)
-        raw = usable * params.v_on * deadline_s
+        raw = usable * mean_rail_voltage(params) * deadline_s
         predicted = raw * self.ratio
         for i, level in enumerate(levels):
             if level.energy <= predicted:
@@ -235,8 +247,12 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
     bins_ahead = max(1, int(deadline_s / bin_s))
 
     steps_per_period = int(deadline_s / dt)
-    v = v_prev = 0.0
-    on = False
+    # Share the validated transition logic rather than re-deriving it. The old
+    # copy omitted KEEP_ALIVE, so the device powered off at 3.4 V while
+    # build_levels priced tasks assuming discharge to 2.283 V -- roughly a 10x
+    # mismatch that invalidated every run built on it.
+    state = PowerState(params)
+    keep_alive = hold_until(V_RELEASE)
     task_energy = 0.0
     done_this_period = False
     current = 0
@@ -246,7 +262,6 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
     comms_paid = 0.0
     warm_level = 0
     last_completed = True
-    e_harvested = e_spilled = 0.0
     chosen = []
 
     for k in range(n_steps):
@@ -281,61 +296,32 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
             else:
                 mean_current = forecast(history, future, bins_ahead)
                 usable = max(0.0, mean_current - params.external_icc)
-                predicted = usable * params.v_on * deadline_s
+                predicted = usable * mean_rail_voltage(params) * deadline_s
                 current = choose(levels, predicted)
             chosen.append(current)
             task_energy = 0.0
             warm_level = current
 
-        i_in = avail[k]
-        if (v_prev + params.clamp_margin) >= params.supply_voltage_limit:
-            e_spilled += i_in * v_prev * dt
-            i_in = 0.0
+        before_load = state.energy_to_load
+        on, i_mcu, _i_in = state.step(
+            avail[k], k,
+            lambda powered: (0.0 if done_this_period else I_ACTIVE),
+            keep_alive=keep_alive)
+        step_energy = state.energy_to_load - before_load
+        period_delivered += step_energy
 
-        was_on = on
-        on = (v_prev > params.v_on) or (v_prev > params.v_off and on)
-        if on and v_prev < V_RELEASE:                     # firmware releases hold
-            on = False
-        if on and not was_on:
-            pass
-
-        i_mcu = I_ACTIVE if (on and not done_this_period) else 0.0
-        e_harvested += i_in * v_prev * dt
-
-        # Reactive control: no prediction. Partway through the period, compare
-        # the energy actually banked against what this level still needs. If the
-        # task cannot finish at the current pace, drop to a cheaper level and
-        # keep the work already done -- the levels share one binary, so only the
-        # stride changes. This sidesteps forecasting entirely, which matters
-        # because forecast error (~30%) is larger than the L1/L2 energy gap
-        # (22%), so no forecaster can reliably tell those two levels apart.
-        if reactive and on and not done_this_period:
-            elapsed = k % steps_per_period
-            progress = elapsed / steps_per_period
-            # Judging too early is wrong: the device spends the start of a
-            # period charging, so the observed rate looks pessimistic and the
-            # task degrades needlessly. Wait until enough of the period has run
-            # for the rate estimate to mean something.
-            if (progress >= REACTIVE_MIN_PROGRESS
-                    and elapsed % REACTIVE_CHECK_STEPS == 0):
-                rate = task_energy / (elapsed * dt)            # J/s observed so far
-                projected = task_energy + rate * (1.0 - progress) * deadline_s
-                while (current + 1 < len(levels)
-                       and projected < levels[current].energy):
-                    current += 1                               # cannot finish: degrade
-                # If energy recovered, climb back toward the exact level. The
-                # margin stops it oscillating around a threshold.
-                while (current > 0
-                       and projected > levels[current - 1].energy * REACTIVE_UPGRADE_MARGIN):
-                    current -= 1
-                warm_level = current
+        # Mid-task switching is DISABLED. It changed stride or term count
+        # partway through a task, kept the work already done, and recorded the
+        # final level's error -- which assumes the two levels' partial results
+        # compose. For a Sobel convolution they do not: the output would be a
+        # hybrid image belonging to neither level, with an error neither was
+        # measured at. Level choice therefore happens only at task boundaries,
+        # where the reactive policy still adapts from the previous period's
+        # outcome. Restart-on-switch is a separate design worth studying.
 
         # One result per deadline period: once this period's task is done the
         # device stops working rather than racing ahead into the next one.
-        if on:
-            period_delivered += i_mcu * v_prev * dt
         if on and not done_this_period:
-            step_energy = i_mcu * v_prev * dt
             if comms_paid < comms_energy:             # radio round trip first
                 comms_paid += step_energy
                 step_energy = 0.0
@@ -347,8 +333,6 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
                 task_energy = 0.0
                 done_this_period = True
 
-        v_prev = v
-        v = max(0.0, v + dt * (i_in - (i_mcu + params.external_icc)) / params.capacitance)
 
     periods = max(1, n_steps // steps_per_period)
     assert completed <= periods, f"{completed} completions in {periods} periods"
@@ -358,9 +342,10 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         "missed": missed,
         "completion_rate": completed / periods,
         "mean_error": float(np.mean(errors)) if errors else float("nan"),
-        "energy_harvested_mJ": e_harvested * 1e3,
-        "energy_spilled_mJ": e_spilled * 1e3,
-        "tasks_per_mJ": completed / (e_harvested * 1e3) if e_harvested > 0 else 0.0,
+        "energy_harvested_mJ": state.energy_harvested * 1e3,
+        "energy_spilled_mJ": state.energy_spilled * 1e3,
+        "tasks_per_mJ": (completed / (state.energy_harvested * 1e3)
+                         if state.energy_harvested > 0 else 0.0),
         "level_mix": np.bincount(executed, minlength=len(levels)).tolist(),
     }
 

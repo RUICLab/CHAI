@@ -63,6 +63,63 @@ def trace_index(step: int, n_samples: int, params: PowerParams) -> int:
 
 
 @dataclass
+class PowerState:
+    """One power-model timestep, shared by every simulation in this package.
+
+    This exists because it was duplicated once and the copy was wrong: the
+    selector reimplemented the loop and omitted KEEP_ALIVE, so it powered the
+    device off at 3.4 V while task energy was priced assuming discharge to
+    2.283 V -- roughly a 10x mismatch that invalidated 480 runs. Any simulation
+    that needs the harvester, capacitor and supervisor must call ``step`` rather
+    than re-derive it.
+    """
+
+    params: PowerParams
+    v: float = 0.0
+    v_prev: float = 0.0
+    on: bool = False
+    boots: int = 0
+    energy_harvested: float = 0.0
+    energy_spilled: float = 0.0
+    energy_to_load: float = 0.0
+    energy_to_supervisor: float = 0.0
+
+    def step(self, available, step_index, mcu_current, keep_alive=None):
+        """Advance one timestep. ``mcu_current(on)`` gives the MCU draw [A].
+
+        Returns ``(powered, i_mcu, i_in)``. Decisions use the capacitor voltage
+        from the previous step, matching Fused's one-step output delay.
+        """
+        p = self.params
+        dt = p.timestep
+        v_decide = self.v_prev
+
+        if (v_decide + p.clamp_margin) < p.supply_voltage_limit:
+            i_in = available
+        else:
+            i_in = 0.0
+            self.energy_spilled += available * v_decide * dt
+
+        was_on = self.on
+        forced = bool(keep_alive and keep_alive(step_index, v_decide, was_on))
+        on = forced or (v_decide > p.v_on) or (v_decide > p.v_off and was_on)
+        if on and v_decide < p.pmm_off:
+            on = False                      # MCU brown-out overrides KEEP_ALIVE
+        if on and not was_on:
+            self.boots += 1
+        self.on = on
+
+        i_mcu = mcu_current(on) if on else 0.0
+        self.energy_harvested += i_in * v_decide * dt
+        self.energy_to_load += i_mcu * v_decide * dt
+        self.energy_to_supervisor += p.external_icc * v_decide * dt
+
+        self.v_prev = self.v
+        self.v = max(0.0, self.v + dt * (i_in - (i_mcu + p.external_icc)) / p.capacitance)
+        return on, i_mcu, i_in
+
+
+@dataclass
 class SimResult:
     v_cap: np.ndarray
     i_harvest: np.ndarray
@@ -97,45 +154,25 @@ def simulate(trace: np.ndarray, load_current, n_steps: int,
     PMM brown-out at ``params.pmm_off``.
     """
     constant = not callable(load_current)
-    dt, cap = params.timestep, params.capacitance
-    v = v_prev = v0
-    on = False
-    boots = 0
+    state = PowerState(params, v=v0, v_prev=v0)
     v_cap = np.empty(n_steps)
     i_harv = np.empty(n_steps)
     powered = np.zeros(n_steps, dtype=bool)
-    e_harv = e_spill = e_load = e_sup = 0.0
     n = len(trace)
 
     for j in range(n_steps):
         k = start_step + j
         available = trace[trace_index(k, n, params)] / params.load_resistance
-
-        if (v_prev + params.clamp_margin) < params.supply_voltage_limit:
-            i_in = available
-        else:
-            i_in = 0.0
-            e_spill += available * v_prev * dt
-
-        was_on = on
-        forced = bool(keep_alive and keep_alive(k, v_prev, was_on))
-        on = forced or (v_prev > params.v_on) or (v_prev > params.v_off and on)
-        if on and v_prev < params.pmm_off:
-            on = False                       # MCU brown-out overrides keepAlive
-        if on and not was_on:
-            boots += 1
-
-        i_mcu = (load_current if constant else load_current(k, on)) if on else 0.0
-        i_out = i_mcu + params.external_icc
-
-        e_harv += i_in * v_prev * dt
-        e_load += i_mcu * v_prev * dt
-        e_sup += params.external_icc * v_prev * dt
-
-        v_cap[j] = v
+        v_before = state.v
+        on, _i_mcu, i_in = state.step(
+            available, k,
+            (lambda _on: load_current) if constant else (lambda _on: load_current(k, _on)),
+            keep_alive)
+        v_cap[j] = v_before
         i_harv[j] = i_in
         powered[j] = on
-        v_prev = v
-        v = max(0.0, v + dt * (i_in - i_out) / cap)
 
-    return SimResult(v_cap, i_harv, powered, boots, e_harv, e_spill, e_load, e_sup)
+    return SimResult(v_cap, i_harv, powered, state.boots, state.energy_harvested,
+                     state.energy_spilled, state.energy_to_load,
+                     state.energy_to_supervisor)
+
