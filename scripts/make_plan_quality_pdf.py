@@ -95,7 +95,7 @@ def comparison_table():
         ["Distinct per-function menus <font size=7.5>(ar-iclib)</font>", "1", "<b>7</b>"],
         ["Accepted plans", "20", "13"],
         ["Hardware-impossible operators delivered", "1", "<b>0</b>"],
-        ["Unsupported labels <i>detected</i> in generation", "35", "37"],
+        ["False operator labels the planner made <font size=7.5>(distinct IDs, 42 function attempts)</font>", "19", "22"],
         ["Unsupported labels <i>shipped</i> in the plan", "<b>10</b>", "<b>0</b>"],
         ["Plans carrying at least one false label",
          "<b>10 of 20 &nbsp;(50%)</b>", "<b>0 of 13 &nbsp;(0%)</b>"],
@@ -186,16 +186,33 @@ def build():
     f.append(comparison_table())
     f.append(Spacer(1, 13))
 
-    f.append(Paragraph("1.&nbsp; Both planners mislabel at the same rate. "
-                       "Only one gets caught.", H3))
+    f.append(Paragraph("1.&nbsp; Neither planner labels more accurately. "
+                       "Only one arm catches it.", H3))
     f.append(Paragraph(
-        "35 versus 37 unsupported operator labels were detected during "
-        "generation &mdash; statistically indistinguishable. The model is not "
-        "smarter under CHAI. What differs is what survives to the delivered "
-        "artifact: <b>10 versus 0</b>. Exactly half of arm B&rsquo;s plans ship "
-        "at least one operator label the code does not implement. CHAI detects "
-        "the same mistakes and removes them before acceptance. Figure 1 "
-        "overleaf shows both quantities side by side.", BODY))
+        "Counting <i>distinct</i> false operator labels &mdash; one per "
+        "(benchmark, seed, function, operator id) that ever failed conformance "
+        "&mdash; over a denominator both arms record: <b>19</b> for arm B "
+        "against <b>22</b> for arm C, in 42 function attempts each (0.45 versus "
+        "0.52 per attempt). Per-seed counts are B {5, 7, 7} and C {7, 7, 8}; the "
+        "ranges overlap, so this run cannot separate the two planners, and if "
+        "anything CHAI&rsquo;s model is marginally worse. What differs is what "
+        "survives to the delivered artifact: <b>10 versus 0</b>. Exactly half of "
+        "arm B&rsquo;s plans ship at least one operator label the code does not "
+        "implement. CHAI detects the same mistakes and removes them before "
+        "acceptance. Figure 1 overleaf shows both quantities side by side.", BODY))
+    f.append(callout(
+        "Why this number changed",
+        "An earlier version reported <b>35 versus 37</b> here and called it the "
+        "same mislabelling rate. Both halves were wrong. "
+        "<font face='Courier'>operator_conformance_violation_count</font> counts "
+        "violation <i>events</i>, so one bad operator re-checked after each retry "
+        "counts once per attempt &mdash; and the arms do not retry equally. "
+        "Conformance is enforced only in the CHAI arms, which re-prompt after a "
+        "failed check: 2.47 attempts per violation in arm C against 1.84 in arm "
+        "B. The event count therefore penalised the arm doing the checking. "
+        "There was also no denominator: 35 and 37 were bare totals. The "
+        "corrected counts are recomputed by "
+        "<font face='Courier'>scripts/operator_label_audit.py</font>."))
     f.append(callout(
         "Caveat &mdash; state this plainly when citing the figure",
         "CHAI&rsquo;s zero is an <i>enforcement outcome</i>, not evidence of a "
@@ -203,8 +220,8 @@ def build():
         "accepted artifact, so the zero is true by construction. The honest "
         "claim is <b>&ldquo;CHAI detects and removes the false labels that "
         "CheckMate ships&rdquo;</b> &mdash; never &ldquo;CHAI&rsquo;s model "
-        "makes fewer mistakes.&rdquo; The 35-vs-37 detection bars are shown "
-        "precisely so the figure cannot be misread."))
+        "makes fewer mistakes.&rdquo; The 19-vs-22 bars are shown precisely "
+        "so the figure cannot be misread."))
 
     f.append(PageBreak())
 

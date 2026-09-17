@@ -9,6 +9,7 @@ Source: reports/plan_quality_data.json (6 benchmarks x 3 repeats, 7B planner)
 plus operator-conformance detection counts recomputed from the campaign's
 experiment_metrics_*.json files.
 """
+import json
 import os
 
 import matplotlib
@@ -39,9 +40,33 @@ plt.rcParams.update({
 })
 
 # ---- measured values ----------------------------------------------------
-DETECTED_B, SHIPPED_B = 35, 10      # arm B: mislabels found / mislabels delivered
-DETECTED_C, SHIPPED_C = 37, 0       # arm C: mislabels found / mislabels delivered
-PLANS_B, PLANS_C = 20, 13
+# The mislabel counts are READ from the audit, never typed here. The figure
+# previously hardcoded 35 vs 37, which were violation EVENTS: the same operator
+# on the same function, re-checked after each retry, counted once per attempt.
+# Arm C retries more than arm B precisely because it is the arm that enforces
+# the check, so the event count penalised the arm doing the right thing. See
+# scripts/operator_label_audit.py.
+def _audit():
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "reports", "operator_label_audit.json")
+    if not os.path.exists(path):
+        raise SystemExit(
+            "missing " + path + "\nrun: python3 scripts/operator_label_audit.py "
+            "experiment_results/planquality_20260906_164509")
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)["arms"]
+
+
+_ARMS = _audit()
+_B, _C = _ARMS["operator_only_plus10"], _ARMS["chai_plus10"]
+
+# Distinct (benchmark, seed, function, operator id) tuples that ever failed
+# conformance, over a denominator both arms record: functions attempted.
+MADE_B, MADE_C = _B["distinct_invalid_ids"], _C["distinct_invalid_ids"]
+ATTEMPTS = _B["functions_attempted"]
+SHIPPED_B, SHIPPED_C = _B["shipped_invalid_labels"], _C["shipped_invalid_labels"]
+PLANS_B, PLANS_C = _B["accepted_plans"], _C["accepted_plans"]
+AFFECTED_B = _B["plans_carrying_a_false_label"]
 OFFERED_B, OFFERED_C = 32, 16       # operators exposed to planner (C: median, 15-17)
 MENUS_B, MENUS_C = 1, 7             # distinct per-function menus, ar-iclib
 INFEAS_B, INFEAS_C = 1, 0           # hardware-impossible operators delivered
@@ -56,18 +81,19 @@ def _save(fig, name):
 
 
 def figure_provenance():
-    """Same mislabelling rate, opposite delivered outcome."""
+    """Indistinguishable mislabelling, opposite delivered outcome."""
     fig, ax = plt.subplots(figsize=(7.4, 4.4))
 
     xs = [0, 1]
     w = 0.30
-    det = [DETECTED_B, DETECTED_C]
+    det = [MADE_B, MADE_C]
     shp = [SHIPPED_B, SHIPPED_C]
     xd = [x - w / 2 - 0.02 for x in xs]
     xp = [x + w / 2 + 0.02 for x in xs]
 
     ax.bar(xd, det, w, color=C_RAW, edgecolor=INK, linewidth=0.7,
-           label="Detected during generation  (the planner's own mislabels)")
+           label="False labels the planner made  (distinct operator IDs, "
+                 "in " + str(ATTEMPTS) + " function attempts)")
     ax.bar(xp, shp, w, color=[C_BASE, C_CHAI], edgecolor=INK, linewidth=0.7,
            label="Shipped in the delivered plan  (what a user receives)")
 
@@ -85,14 +111,19 @@ def figure_provenance():
     y = top + 6.0
     ax.plot([xd[0], xd[0], xd[1], xd[1]], [y - 1.3, y, y, y - 1.3],
             color="#8A847C", linewidth=0.9)
-    ax.text(0.5, y + 0.9, "same mislabelling rate   35  vs  37", ha="center",
-            fontsize=9.5, style="italic", color=MUTED)
+    # Per-seed counts overlap (B 5-7, C 7-8), so this run cannot separate the
+    # two planners' mislabelling rates. It must not be read as CHAI's model
+    # being more accurate: it is, if anything, marginally worse.
+    ax.text(0.5, y + 0.9,
+            "planners mislabel alike   " + str(MADE_B) + "  vs  " + str(MADE_C)
+            + "   (per-seed ranges overlap)",
+            ha="center", fontsize=9.5, style="italic", color=MUTED)
 
     ax.text(xp[0] + 0.19, 6.0,
-            "1 in 2 plans\ncarries a false\noperator label",
+            str(AFFECTED_B) + " of " + str(PLANS_B) + " plans\ncarry a false\noperator label",
             fontsize=9, color=C_BASE, ha="left", va="center", linespacing=1.5)
     ax.text(xp[1] + 0.19, 4.0,
-            "all 37 caught\nand removed\nbefore delivery",
+            "every false label\nstripped by the\ncontrol plane\nbefore delivery",
             fontsize=9, color=C_CHAI, ha="left", va="center", linespacing=1.5)
 
     ax.set_xticks(xs)
@@ -101,7 +132,7 @@ def figure_provenance():
         "C   CHAI, same 30 operators\ncontrol plane ON   (" + str(PLANS_C) + " plans)",
     ], fontsize=10)
     ax.tick_params(axis="x", length=0, pad=9)
-    ax.set_ylabel("Unsupported operator labels")
+    ax.set_ylabel("Distinct unsupported operator labels")
     ax.set_xlim(-0.52, 1.74)
     ax.set_ylim(0, top + 11)
     ax.legend(frameon=False, fontsize=8.8, loc="upper center",

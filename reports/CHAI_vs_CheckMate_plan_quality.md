@@ -27,7 +27,7 @@ plane.**
 | Distinct per-function menus (ar-iclib) | 1 | **7** |
 | Accepted plans | 20 | 13 |
 | Hardware-impossible operators delivered | 1 | **0** |
-| Unsupported labels *detected* during generation | 35 | 37 |
+| False operator labels the planner made (distinct IDs, 42 function attempts) | 19 | 22 |
 | Unsupported labels *shipped* in the delivered plan | 10 | **0** |
 | Plans carrying at least one false label | **10 of 20 (50%)** | **0 of 13 (0%)** |
 
@@ -35,10 +35,23 @@ plane.**
 
 ## The three findings
 
-### 1. Both planners lie at the same rate. Only one gets caught.
+### 1. Neither planner labels more accurately. Only one arm catches it.
 
-35 vs 37 unsupported operator labels detected during generation — statistically
-indistinguishable. The model is not smarter under CHAI.
+Counting *distinct* false operator labels — one per (benchmark, seed, function,
+operator id) that ever failed conformance — over a denominator both arms record:
+**19 (arm B) vs 22 (arm C)** in 42 function attempts each, 0.45 vs 0.52 per
+attempt. Per-seed counts are B {5, 7, 7} and C {7, 7, 8}: the ranges overlap, so
+this run cannot separate the two planners. If anything CHAI's model is
+marginally worse. It is certainly not better.
+
+An earlier version of this table reported **35 vs 37** here and called it "the
+same mislabelling rate". Both halves were wrong.
+`operator_conformance_violation_count` counts violation *events*, so one bad
+operator re-checked after each retry counts once per attempt — and the arms do
+not retry equally. Conformance is enforced only in the CHAI arms, which
+re-prompt after a failed check: 2.47 attempts per violation in arm C against
+1.84 in arm B. The event count therefore penalised the arm doing the checking.
+There was also no denominator: 35 and 37 were bare totals.
 
 What differs is what survives to the delivered artifact: **10 vs 0**. Exactly
 half of arm B's plans ship at least one operator label the code does not
@@ -48,8 +61,9 @@ implement. CHAI detects the same mistakes and removes them before acceptance.
 > outcome*, not evidence of a better planner. CHAI prunes disproven labels
 > before writing the accepted artifact, so the zero is true by construction.
 > The honest claim is *"CHAI detects and removes the false labels that
-> CheckMate ships"* — never *"CHAI's model makes fewer mistakes."* The 35-vs-37
-> detection counts are shown precisely so the figure cannot be misread.
+> CheckMate ships"* — never *"CHAI's model makes fewer mistakes."* The 19-vs-22
+> counts are shown precisely so the figure cannot be misread; they are
+> recomputed by `scripts/operator_label_audit.py`, never typed by hand.
 
 ### 2. The hardware gate removes half the menu before the model sees it.
 
