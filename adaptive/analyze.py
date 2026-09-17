@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import sys
+from math import isnan
 from collections import defaultdict
 
 TOL = 1e-9
@@ -114,16 +115,29 @@ def best_fixed(byname):
 
 
 def verdict(row, ref):
-    """How `row` compares to the best fixed level in its own cell."""
+    """How `row` compares to the best fixed level in its own cell.
+
+    A policy that completed nothing has no mean error -- it is NaN, not zero.
+    NaN fails every comparison silently, so it is handled explicitly: without
+    this, beating a reference that completed nothing was reported as "more
+    tasks, worse error", and two policies that both completed nothing compared
+    as a tie on an error neither of them has.
+    """
     dc = row["completion"] - ref["completion"]
-    de = row["mean_error"] - ref["mean_error"]
+    row_err, ref_err = row["mean_error"], ref["mean_error"]
     if dc < -TOL:
         return "loses completion"
     if dc > TOL:
-        return "wins completion" if de <= TOL else "more tasks, worse error"
-    if de < -TOL:
+        # No error to lose against when the reference produced no output at all.
+        if isnan(ref_err):
+            return "wins completion"
+        return "wins completion" if row_err <= ref_err + TOL \
+            else "more tasks, worse error"
+    if isnan(row_err) or isnan(ref_err):
+        return "ties"          # neither completed anything; nothing to compare
+    if row_err < ref_err - TOL:
         return "wins error"
-    if de > TOL:
+    if row_err > ref_err + TOL:
         return "loses error"
     return "ties"
 
