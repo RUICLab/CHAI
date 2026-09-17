@@ -6,7 +6,7 @@ result does not survive review.
 | file | status |
 |---|---|
 | `energy_adaptive_system.pdf` | **withdrawn** — central claim unsupported |
-| `results_sobel.json`, `results_fft.json` | **withdrawn** — 480 runs produced by a simulator that does not match the energy model |
+| `results_sobel_WITHDRAWN.json`, `results_fft_WITHDRAWN.json` | **withdrawn** — 480 runs produced by a simulator that does not match the energy model |
 | `flow.png` | diagram only; the architecture it shows is still accurate |
 
 ## Why
@@ -48,3 +48,40 @@ was measured on a single image and is image-dependent, yet the report labels it
 in question. The level *measurements* from Fused (`experiment_results/
 sobel_t22_wide`, `fft_taylor`) are also unaffected — the defects are in the
 selector simulation and in how levels were labelled and compared.
+
+
+## Found after the first repair
+
+These were not in the original review. They are recorded because each one
+changed a number that had already been reported as corrected.
+
+**5. Energy was valued at the wrong voltage.**
+`policy_affordable` priced a period's budget at `v_on` = 3.5 V. Energy actually
+reaches the MCU across the whole `KEEP_ALIVE` window, whose mean is 2.89 V, so
+the budget was overestimated by about 25% — predicted 17.93 mJ against 14.38 mJ
+delivered. The affordable policy consequently chose levels it could not finish,
+and scored 72% completion against fixed-L1's 100%. `mean_rail_voltage` fixes it.
+This also invalidated the conclusion drawn from the first repair, that
+prediction loses to measurement: that comparison was run with the inflated
+budget.
+
+**6. The "ceiling" was a clairvoyant forecast, not a ceiling.**
+The first repair added a hindsight policy and called it a genuine upper bound. It
+maximises each period in isolation, so it can spend charge a later period needed
+and finish fewer tasks overall than a more frugal fixed policy. It is a
+*boundary* hindsight oracle and is now labelled as one everywhere.
+
+**7. The campaign driver was never updated.**
+`selector.main()` was repaired; `adaptive/run_experiments.py` was not. It still
+built the dropped server+reactive hybrid, omitted the hindsight oracle, and never
+passed `hindsight=True`. Had the full matrix been run at that point it would have
+measured the pre-repair policy set while reporting post-repair conclusions.
+
+## Unrelated, same class of defect
+
+`operator_conformance_violation_count` counted violation *events* rather than
+distinct mistakes, and the arms do not retry equally — only CHAI enforces the
+check, so CHAI re-prompts and accumulates more events for the same mistake. The
+plan-quality figure's "35 vs 37, the same mislabelling rate" was an artifact of
+that. Corrected to 19 vs 22 distinct operator ids over 42 function attempts by
+`scripts/operator_label_audit.py`; the shipped counts (10 vs 0) are unaffected.
