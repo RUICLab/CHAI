@@ -41,6 +41,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 0,
@@ -65,6 +66,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 82,
@@ -89,6 +91,7 @@
     182
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 182,
@@ -113,6 +116,7 @@
     99
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 182,
@@ -137,6 +141,7 @@
     96
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 150,
@@ -161,6 +166,7 @@
     120
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 164,
@@ -185,6 +191,7 @@
     139
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 176,
@@ -209,6 +216,7 @@
     167
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 182,
@@ -233,6 +241,7 @@
     172
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 179,
@@ -257,6 +266,7 @@
     94
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 182,
@@ -264,6 +274,56 @@
    "min_powered_v": 2.2801746470697504,
    "energy_harvested_mJ": 127.40741737604048,
    "energy_to_load_mJ": 100.65013479693346
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-rf",
+   "deadline_s": 8.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 0.3644444444444444,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.11882459350486978,
+   "spill_mJ": 27.020007854153356,
+   "level_mix": [
+    0,
+    82,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 225,
+   "periods": 225,
+   "completed": 82,
+   "boots": 1652,
+   "min_powered_v": 2.2802321494127917,
+   "energy_harvested_mJ": 136.85738563822838,
+   "energy_to_load_mJ": 110.55203424663459
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-rf",
+   "deadline_s": 8.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.19555555555555557,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.10226805937540615,
+   "spill_mJ": 111.18501001568657,
+   "level_mix": [
+    0,
+    44,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 141,
+   "decisions": 225,
+   "periods": 225,
+   "completed": 44,
+   "boots": 621,
+   "min_powered_v": 2.2803121108847706,
+   "energy_harvested_mJ": 72.10122315163152,
+   "energy_to_load_mJ": 42.41490112154612
   },
   {
    "benchmark": "sobel",
@@ -281,6 +341,7 @@
     120
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 164,
@@ -305,6 +366,7 @@
     127
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 166,
@@ -329,6 +391,7 @@
     111
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 150,
@@ -353,6 +416,7 @@
     109
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 225,
    "periods": 225,
    "completed": 147,
@@ -377,6 +441,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 0,
@@ -401,6 +466,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 116,
@@ -425,6 +491,7 @@
     119
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 119,
@@ -449,6 +516,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 119,
@@ -473,6 +541,7 @@
     48
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 110,
@@ -497,6 +566,7 @@
     30
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 116,
@@ -521,6 +591,7 @@
     25
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 117,
@@ -545,6 +616,7 @@
     109
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 119,
@@ -569,6 +641,7 @@
     27
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 112,
@@ -593,6 +666,7 @@
     3
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 119,
@@ -600,6 +674,56 @@
    "min_powered_v": 2.2801567782716954,
    "energy_harvested_mJ": 101.82687908875702,
    "energy_to_load_mJ": 73.67878060201852
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-rf",
+   "deadline_s": 15.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 0.9666666666666668,
+   "mean_error": 0.019000000000000003,
+   "tasks_per_mJ": 0.22715841564883524,
+   "spill_mJ": 72.23075346250242,
+   "level_mix": [
+    0,
+    116,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 120,
+   "periods": 120,
+   "completed": 116,
+   "boots": 1083,
+   "min_powered_v": 2.2801567782716954,
+   "energy_harvested_mJ": 102.0786421615223,
+   "energy_to_load_mJ": 74.00133423614764
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-rf",
+   "deadline_s": 15.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.7166666666666668,
+   "mean_error": 0.019000000000000003,
+   "tasks_per_mJ": 0.20101024254943364,
+   "spill_mJ": 95.24289766499939,
+   "level_mix": [
+    0,
+    86,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 30,
+   "decisions": 120,
+   "periods": 120,
+   "completed": 86,
+   "boots": 818,
+   "min_powered_v": 2.2801391583988155,
+   "energy_harvested_mJ": 84.33358563698958,
+   "energy_to_load_mJ": 55.335863750368524
   },
   {
    "benchmark": "sobel",
@@ -617,6 +741,7 @@
     30
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 116,
@@ -641,6 +766,7 @@
     71
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 116,
@@ -665,6 +791,7 @@
     30
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 111,
@@ -689,6 +816,7 @@
     64
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 120,
    "periods": 120,
    "completed": 113,
@@ -713,6 +841,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 5,
@@ -737,6 +866,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 70,
@@ -761,6 +891,7 @@
     70
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 70,
@@ -785,6 +916,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 70,
@@ -809,6 +941,7 @@
     30
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 50,
@@ -833,6 +966,7 @@
     9
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 58,
@@ -857,6 +991,7 @@
     6
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 63,
@@ -881,6 +1016,7 @@
     64
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 70,
@@ -905,6 +1041,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 65,
@@ -929,6 +1066,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 70,
@@ -936,6 +1074,56 @@
    "min_powered_v": 2.2802310188515134,
    "energy_harvested_mJ": 83.24628738308772,
    "energy_to_load_mJ": 55.277634321181765
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-rf",
+   "deadline_s": 25.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 1.0,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.19502635640562915,
+   "spill_mJ": 107.4026466888467,
+   "level_mix": [
+    0,
+    70,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 70,
+   "periods": 70,
+   "completed": 70,
+   "boots": 642,
+   "min_powered_v": 2.2801999076846577,
+   "energy_harvested_mJ": 71.80641751746126,
+   "energy_to_load_mJ": 43.55251270685419
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-rf",
+   "deadline_s": 25.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.8714285714285716,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.18254436024285386,
+   "spill_mJ": 114.29618484497311,
+   "level_mix": [
+    0,
+    61,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 9,
+   "decisions": 70,
+   "periods": 70,
+   "completed": 61,
+   "boots": 569,
+   "min_powered_v": 2.280179721509912,
+   "energy_harvested_mJ": 66.5350529276979,
+   "energy_to_load_mJ": 37.95313406703842
   },
   {
    "benchmark": "sobel",
@@ -953,6 +1141,7 @@
     9
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 58,
@@ -977,6 +1166,7 @@
     32
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 70,
@@ -1001,6 +1191,7 @@
     9
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 58,
@@ -1025,6 +1216,7 @@
     29
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 70,
    "periods": 70,
    "completed": 70,
@@ -1049,6 +1241,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 17,
@@ -1073,6 +1266,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 45,
@@ -1097,6 +1291,7 @@
     45
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 45,
@@ -1121,6 +1316,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 45,
@@ -1145,6 +1341,7 @@
     19
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 35,
@@ -1169,6 +1366,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 35,
@@ -1193,6 +1391,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 42,
@@ -1217,6 +1416,7 @@
     45
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 45,
@@ -1241,6 +1441,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 41,
@@ -1265,6 +1466,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 45,
@@ -1272,6 +1474,56 @@
    "min_powered_v": 2.28015303280282,
    "energy_harvested_mJ": 96.90165762866641,
    "energy_to_load_mJ": 67.86364608456788
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-rf",
+   "deadline_s": 40.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 1.0,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.15411636939277143,
+   "spill_mJ": 128.92353274940274,
+   "level_mix": [
+    0,
+    45,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 45,
+   "periods": 45,
+   "completed": 45,
+   "boots": 419,
+   "min_powered_v": 2.2801999103345016,
+   "energy_harvested_mJ": 58.400669569780575,
+   "energy_to_load_mJ": 27.99795044757385
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-rf",
+   "deadline_s": 40.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.8444444444444443,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.13978899896138544,
+   "spill_mJ": 134.30266401194461,
+   "level_mix": [
+    0,
+    38,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 7,
+   "decisions": 45,
+   "periods": 45,
+   "completed": 38,
+   "boots": 358,
+   "min_powered_v": 2.280153585025819,
+   "energy_harvested_mJ": 54.203893763986045,
+   "energy_to_load_mJ": 23.642807593813966
   },
   {
    "benchmark": "sobel",
@@ -1289,6 +1541,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 35,
@@ -1313,6 +1566,7 @@
     13
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 40,
@@ -1337,6 +1591,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 34,
@@ -1361,6 +1616,7 @@
     12
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 40,
@@ -1385,6 +1641,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 0,
@@ -1409,6 +1666,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 30,
@@ -1433,6 +1691,7 @@
     45
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 45,
@@ -1457,6 +1716,7 @@
     13
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 45,
@@ -1481,6 +1741,7 @@
     20
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 39,
@@ -1505,6 +1766,7 @@
     19
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 38,
@@ -1529,6 +1791,7 @@
     16
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 38,
@@ -1553,6 +1816,7 @@
     41
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 44,
@@ -1577,6 +1841,7 @@
     38
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 43,
@@ -1601,6 +1866,7 @@
     13
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 45,
@@ -1608,6 +1874,56 @@
    "min_powered_v": 2.2804606893588786,
    "energy_harvested_mJ": 152.28449871338034,
    "energy_to_load_mJ": 124.43706213410815
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-solar",
+   "deadline_s": 8.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 0.6666666666666666,
+   "mean_error": 0.019000000000000003,
+   "tasks_per_mJ": 0.18375402450312753,
+   "spill_mJ": 30.769872143449714,
+   "level_mix": [
+    0,
+    30,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 45,
+   "periods": 45,
+   "completed": 30,
+   "boots": 452,
+   "min_powered_v": 2.280357810631859,
+   "energy_harvested_mJ": 163.2617303545882,
+   "energy_to_load_mJ": 136.1485773523639
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-solar",
+   "deadline_s": 8.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.4222222222222222,
+   "mean_error": 0.019000000000000003,
+   "tasks_per_mJ": 0.17485873125129817,
+   "spill_mJ": 101.12915789291647,
+   "level_mix": [
+    0,
+    19,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 19,
+   "decisions": 45,
+   "periods": 45,
+   "completed": 19,
+   "boots": 260,
+   "min_powered_v": 2.280421328380288,
+   "energy_harvested_mJ": 108.65914366434558,
+   "energy_to_load_mJ": 79.09485082114873
   },
   {
    "benchmark": "sobel",
@@ -1625,6 +1941,7 @@
     19
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 38,
@@ -1649,6 +1966,7 @@
     41
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 44,
@@ -1673,6 +1991,7 @@
     19
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 37,
@@ -1697,6 +2016,7 @@
     34
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 42,
@@ -1721,6 +2041,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 0,
@@ -1745,6 +2066,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -1769,6 +2091,7 @@
     24
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -1793,6 +2116,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -1817,6 +2141,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -1841,6 +2166,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -1865,6 +2191,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -1889,6 +2216,7 @@
     4
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -1913,6 +2241,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 23,
@@ -1937,6 +2266,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -1944,6 +2274,56 @@
    "min_powered_v": 2.280508301132587,
    "energy_harvested_mJ": 104.50316407733132,
    "energy_to_load_mJ": 74.66139214722452
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-solar",
+   "deadline_s": 15.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 1.0,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.22965811812396641,
+   "spill_mJ": 106.55859154816898,
+   "level_mix": [
+    0,
+    24,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 24,
+   "periods": 24,
+   "completed": 24,
+   "boots": 244,
+   "min_powered_v": 2.280508301132587,
+   "energy_harvested_mJ": 104.50316407733132,
+   "energy_to_load_mJ": 74.66139214722452
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-solar",
+   "deadline_s": 15.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.9583333333333334,
+   "mean_error": 0.019000000000000006,
+   "tasks_per_mJ": 0.22663967784066194,
+   "spill_mJ": 110.40898899926448,
+   "level_mix": [
+    0,
+    23,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 1,
+   "decisions": 24,
+   "periods": 24,
+   "completed": 23,
+   "boots": 234,
+   "min_powered_v": 2.2804679209079697,
+   "energy_harvested_mJ": 101.48267160955838,
+   "energy_to_load_mJ": 71.55051022054008
   },
   {
    "benchmark": "sobel",
@@ -1961,6 +2341,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -1985,6 +2366,7 @@
     18
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -2009,6 +2391,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -2033,6 +2416,7 @@
     15
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 24,
@@ -2057,6 +2441,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 0,
@@ -2081,6 +2466,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2105,6 +2491,7 @@
     14
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2129,6 +2516,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2153,6 +2541,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 13,
@@ -2177,6 +2566,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2201,6 +2591,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2225,6 +2616,7 @@
     2
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2249,6 +2641,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 13,
@@ -2273,6 +2666,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2280,6 +2674,56 @@
    "min_powered_v": 2.280385179139902,
    "energy_harvested_mJ": 73.60305169785676,
    "energy_to_load_mJ": 43.55246160321466
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-solar",
+   "deadline_s": 25.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 1.0,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.19020950459324046,
+   "spill_mJ": 141.00013266378554,
+   "level_mix": [
+    0,
+    14,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 14,
+   "periods": 14,
+   "completed": 14,
+   "boots": 146,
+   "min_powered_v": 2.280385179139902,
+   "energy_harvested_mJ": 73.60305169785676,
+   "energy_to_load_mJ": 43.55246160321466
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-solar",
+   "deadline_s": 25.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.9285714285714286,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.1841812117735156,
+   "spill_mJ": 144.85053080817661,
+   "level_mix": [
+    0,
+    13,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 1,
+   "decisions": 14,
+   "periods": 14,
+   "completed": 13,
+   "boots": 136,
+   "min_powered_v": 2.280385104339933,
+   "energy_harvested_mJ": 70.58266081985535,
+   "energy_to_load_mJ": 40.44166115087399
   },
   {
    "benchmark": "sobel",
@@ -2297,6 +2741,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2321,6 +2766,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2345,6 +2791,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2369,6 +2816,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -2393,6 +2841,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2417,6 +2866,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2441,6 +2891,7 @@
     9
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2465,6 +2916,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2489,6 +2941,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2513,6 +2966,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2537,6 +2991,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2561,6 +3016,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2585,6 +3041,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2609,6 +3066,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2616,6 +3074,56 @@
    "min_powered_v": 2.280382521196277,
    "energy_harvested_mJ": 160.97487650308,
    "energy_to_load_mJ": 133.5244485150477
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-solar",
+   "deadline_s": 40.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 1.0,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.1512398958489769,
+   "spill_mJ": 164.12360006141512,
+   "level_mix": [
+    0,
+    9,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 9,
+   "periods": 9,
+   "completed": 9,
+   "boots": 94,
+   "min_powered_v": 2.2804916680413787,
+   "energy_harvested_mJ": 59.508107629134436,
+   "energy_to_load_mJ": 27.998141603794974
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "measured-solar",
+   "deadline_s": 40.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.8888888888888888,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.14162395788899793,
+   "spill_mJ": 167.97365041215681,
+   "level_mix": [
+    0,
+    8,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 1,
+   "decisions": 9,
+   "periods": 9,
+   "completed": 8,
+   "boots": 84,
+   "min_powered_v": 2.280475384434616,
+   "energy_harvested_mJ": 56.487617767823174,
+   "energy_to_load_mJ": 24.887300558341156
   },
   {
    "benchmark": "sobel",
@@ -2633,6 +3141,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2657,6 +3166,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2681,6 +3191,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2705,6 +3216,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -2729,6 +3241,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 0,
@@ -2753,6 +3266,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 16,
@@ -2777,6 +3291,7 @@
     21
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 21,
@@ -2801,6 +3316,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 21,
@@ -2825,6 +3341,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 19,
@@ -2849,6 +3366,7 @@
     8
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 21,
@@ -2873,6 +3391,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 17,
@@ -2897,6 +3416,7 @@
     19
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 21,
@@ -2921,6 +3441,7 @@
     21
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 21,
@@ -2945,6 +3466,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 21,
@@ -2952,6 +3474,56 @@
    "min_powered_v": 2.2803770791466835,
    "energy_harvested_mJ": 105.2994998633944,
    "energy_to_load_mJ": 79.37412749706098
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "varying",
+   "deadline_s": 8.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 0.35555555555555557,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.1501972749387792,
+   "spill_mJ": 87.49075807882818,
+   "level_mix": [
+    0,
+    16,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 45,
+   "periods": 45,
+   "completed": 16,
+   "boots": 217,
+   "min_powered_v": 2.2803759815626448,
+   "energy_harvested_mJ": 106.52656652074174,
+   "energy_to_load_mJ": 80.31431371428856
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "varying",
+   "deadline_s": 8.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.28888888888888886,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.17323154153301765,
+   "spill_mJ": 130.61750939339473,
+   "level_mix": [
+    0,
+    13,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 28,
+   "decisions": 45,
+   "periods": 45,
+   "completed": 13,
+   "boots": 109,
+   "min_powered_v": 2.280375581193532,
+   "energy_harvested_mJ": 75.04407040978863,
+   "energy_to_load_mJ": 45.41433804243149
   },
   {
    "benchmark": "sobel",
@@ -2969,6 +3541,7 @@
     8
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 21,
@@ -2993,6 +3566,7 @@
     6
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 21,
@@ -3017,6 +3591,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 20,
@@ -3041,6 +3616,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 16,
@@ -3065,6 +3641,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 4,
@@ -3089,6 +3666,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 13,
@@ -3113,6 +3691,7 @@
     19
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 19,
@@ -3137,6 +3716,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 19,
@@ -3161,6 +3741,7 @@
     9
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 14,
@@ -3185,6 +3766,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 13,
@@ -3209,6 +3791,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 16,
@@ -3233,6 +3816,7 @@
     17
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 19,
@@ -3257,6 +3841,7 @@
     19
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 19,
@@ -3281,6 +3866,7 @@
     6
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 19,
@@ -3288,6 +3874,56 @@
    "min_powered_v": 2.2802598155862537,
    "energy_harvested_mJ": 130.71850940736508,
    "energy_to_load_mJ": 104.18276545678437
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "varying",
+   "deadline_s": 15.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 0.5416666666666666,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.1497991871196713,
+   "spill_mJ": 113.02858716055792,
+   "level_mix": [
+    0,
+    13,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 24,
+   "periods": 24,
+   "completed": 13,
+   "boots": 168,
+   "min_powered_v": 2.2802155043254766,
+   "energy_harvested_mJ": 86.78284742369519,
+   "energy_to_load_mJ": 59.857510148662534
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "varying",
+   "deadline_s": 15.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.4583333333333333,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.15782423492872816,
+   "spill_mJ": 136.7561495780054,
+   "level_mix": [
+    0,
+    11,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 10,
+   "decisions": 24,
+   "periods": 24,
+   "completed": 11,
+   "boots": 108,
+   "min_powered_v": 2.2802148787764023,
+   "energy_harvested_mJ": 69.69778757341982,
+   "energy_to_load_mJ": 40.659463295522514
   },
   {
    "benchmark": "sobel",
@@ -3305,6 +3941,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 13,
@@ -3329,6 +3966,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 15,
@@ -3353,6 +3991,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 12,
@@ -3377,6 +4016,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 15,
@@ -3401,6 +4041,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 6,
@@ -3425,6 +4066,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 10,
@@ -3449,6 +4091,7 @@
     14
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -3473,6 +4116,7 @@
     4
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -3497,6 +4141,7 @@
     8
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 11,
@@ -3521,6 +4166,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 11,
@@ -3545,6 +4191,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 9,
@@ -3569,6 +4216,7 @@
     13
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -3593,6 +4241,7 @@
     10
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 12,
@@ -3617,6 +4266,7 @@
     4
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -3624,6 +4274,56 @@
    "min_powered_v": 2.2801176670193986,
    "energy_harvested_mJ": 135.84653133312926,
    "energy_to_load_mJ": 109.11745573291633
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "varying",
+   "deadline_s": 25.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 0.7142857142857143,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.14538054805352618,
+   "spill_mJ": 134.1588646475521,
+   "level_mix": [
+    0,
+    10,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 14,
+   "periods": 14,
+   "completed": 10,
+   "boots": 113,
+   "min_powered_v": 2.2803882595028293,
+   "energy_harvested_mJ": 68.7849931362083,
+   "energy_to_load_mJ": 41.71432492174433
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "varying",
+   "deadline_s": 25.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.42857142857142855,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.11806965145515438,
+   "spill_mJ": 159.0009657416738,
+   "level_mix": [
+    0,
+    6,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 7,
+   "decisions": 14,
+   "periods": 14,
+   "completed": 6,
+   "boots": 50,
+   "min_powered_v": 2.2802084336433177,
+   "energy_harvested_mJ": 50.81746177830414,
+   "energy_to_load_mJ": 21.57113178320293
   },
   {
    "benchmark": "sobel",
@@ -3641,6 +4341,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 11,
@@ -3665,6 +4366,7 @@
     6
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 10,
@@ -3689,6 +4391,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 11,
@@ -3713,6 +4416,7 @@
     6
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 10,
@@ -3737,6 +4441,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 4,
@@ -3761,6 +4466,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -3785,6 +4491,7 @@
     9
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -3809,6 +4516,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -3833,6 +4541,7 @@
     3
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 7,
@@ -3857,6 +4566,7 @@
     3
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 7,
@@ -3881,6 +4591,7 @@
     2
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 5,
@@ -3905,6 +4616,7 @@
     9
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -3929,6 +4641,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 8,
@@ -3953,6 +4666,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -3960,6 +4674,56 @@
    "min_powered_v": 2.280391638824424,
    "energy_harvested_mJ": 102.81446719844145,
    "energy_to_load_mJ": 74.89878383631408
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "varying",
+   "deadline_s": 40.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 1.0,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.15849498305821594,
+   "spill_mJ": 151.92240972564008,
+   "level_mix": [
+    0,
+    9,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 9,
+   "periods": 9,
+   "completed": 9,
+   "boots": 85,
+   "min_powered_v": 2.28036561567995,
+   "energy_harvested_mJ": 56.78413175194484,
+   "energy_to_load_mJ": 27.99806038915648
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "varying",
+   "deadline_s": 40.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.6666666666666666,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.12438610196909175,
+   "spill_mJ": 163.50330101648672,
+   "level_mix": [
+    0,
+    6,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 3,
+   "decisions": 9,
+   "periods": 9,
+   "completed": 6,
+   "boots": 58,
+   "min_powered_v": 2.2802614043741665,
+   "energy_harvested_mJ": 48.236900304914435,
+   "energy_to_load_mJ": 18.664844413497693
   },
   {
    "benchmark": "sobel",
@@ -3977,6 +4741,7 @@
     3
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 7,
@@ -4001,6 +4766,7 @@
     3
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 7,
@@ -4025,6 +4791,7 @@
     3
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 7,
@@ -4049,6 +4816,7 @@
     3
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 7,
@@ -4073,6 +4841,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 0,
@@ -4097,6 +4866,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 17,
@@ -4121,6 +4891,7 @@
     36
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 36,
@@ -4145,6 +4916,7 @@
     19
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 36,
@@ -4169,6 +4941,7 @@
     16
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 29,
@@ -4193,6 +4966,7 @@
     18
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 31,
@@ -4217,6 +4991,7 @@
     26
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 33,
@@ -4241,6 +5016,7 @@
     35
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 36,
@@ -4265,6 +5041,7 @@
     34
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 35,
@@ -4289,6 +5066,7 @@
     17
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 36,
@@ -4296,6 +5074,56 @@
    "min_powered_v": 2.2803292157190294,
    "energy_harvested_mJ": 129.8917818985022,
    "energy_to_load_mJ": 103.43608821605199
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "mixed",
+   "deadline_s": 8.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 0.37777777777777777,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.12306695708246962,
+   "spill_mJ": 30.312856249927854,
+   "level_mix": [
+    0,
+    17,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 45,
+   "periods": 45,
+   "completed": 17,
+   "boots": 335,
+   "min_powered_v": 2.2803349485392697,
+   "energy_harvested_mJ": 138.13618539871723,
+   "energy_to_load_mJ": 111.91984461843352
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "mixed",
+   "deadline_s": 8.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.28888888888888886,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.14742145992622832,
+   "spill_mJ": 95.78556338239511,
+   "level_mix": [
+    0,
+    13,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 23,
+   "decisions": 45,
+   "periods": 45,
+   "completed": 13,
+   "boots": 169,
+   "min_powered_v": 2.280325812620527,
+   "energy_harvested_mJ": 88.1825482294462,
+   "energy_to_load_mJ": 58.954596275579824
   },
   {
    "benchmark": "sobel",
@@ -4313,6 +5141,7 @@
     18
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 31,
@@ -4337,6 +5166,7 @@
     24
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 33,
@@ -4361,6 +5191,7 @@
     15
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 26,
@@ -4385,6 +5216,7 @@
     18
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 45,
    "periods": 45,
    "completed": 28,
@@ -4409,6 +5241,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 0,
@@ -4433,6 +5266,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 23,
@@ -4457,6 +5291,7 @@
     23
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 23,
@@ -4481,6 +5316,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 23,
@@ -4505,6 +5341,7 @@
     8
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 22,
@@ -4529,6 +5366,7 @@
     6
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 23,
@@ -4553,6 +5391,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 22,
@@ -4577,6 +5416,7 @@
     22
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 23,
@@ -4601,6 +5441,7 @@
     10
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 22,
@@ -4625,6 +5466,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 23,
@@ -4632,6 +5474,56 @@
    "min_powered_v": 2.2801961591137867,
    "energy_harvested_mJ": 101.36768759317259,
    "energy_to_load_mJ": 73.19707054423169
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "mixed",
+   "deadline_s": 15.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 0.9583333333333334,
+   "mean_error": 0.019000000000000006,
+   "tasks_per_mJ": 0.22689676114846205,
+   "spill_mJ": 78.23607799595477,
+   "level_mix": [
+    0,
+    23,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 24,
+   "periods": 24,
+   "completed": 23,
+   "boots": 220,
+   "min_powered_v": 2.2801961591137867,
+   "energy_harvested_mJ": 101.36768759317259,
+   "energy_to_load_mJ": 73.19707054423169
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "mixed",
+   "deadline_s": 15.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.7083333333333334,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.20388469091786768,
+   "spill_mJ": 101.27956223595908,
+   "level_mix": [
+    0,
+    17,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 6,
+   "decisions": 24,
+   "periods": 24,
+   "completed": 17,
+   "boots": 168,
+   "min_powered_v": 2.2801920986189086,
+   "energy_harvested_mJ": 83.38046335635975,
+   "energy_to_load_mJ": 54.53250500203757
   },
   {
    "benchmark": "sobel",
@@ -4649,6 +5541,7 @@
     6
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 23,
@@ -4673,6 +5566,7 @@
     10
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 21,
@@ -4697,6 +5591,7 @@
     6
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 23,
@@ -4721,6 +5616,7 @@
     9
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 24,
    "periods": 24,
    "completed": 21,
@@ -4745,6 +5641,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 0,
@@ -4769,6 +5666,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -4793,6 +5691,7 @@
     14
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -4817,6 +5716,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -4841,6 +5741,7 @@
     5
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 12,
@@ -4865,6 +5766,7 @@
     2
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 13,
@@ -4889,6 +5791,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 13,
@@ -4913,6 +5816,7 @@
     13
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -4937,6 +5841,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 13,
@@ -4961,6 +5866,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -4968,6 +5874,56 @@
    "min_powered_v": 2.280366003660964,
    "energy_harvested_mJ": 72.37809386880778,
    "energy_to_load_mJ": 43.55224318504722
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "mixed",
+   "deadline_s": 25.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 1.0,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.1934286916339126,
+   "spill_mJ": 112.20122569572993,
+   "level_mix": [
+    0,
+    14,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 14,
+   "periods": 14,
+   "completed": 14,
+   "boots": 127,
+   "min_powered_v": 2.280366003660964,
+   "energy_harvested_mJ": 72.37809386880778,
+   "energy_to_load_mJ": 43.55224318504722
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "mixed",
+   "deadline_s": 25.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.8571428571428571,
+   "mean_error": 0.018999999999999996,
+   "tasks_per_mJ": 0.18052827229399937,
+   "spill_mJ": 119.8920536935124,
+   "level_mix": [
+    0,
+    12,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 2,
+   "decisions": 14,
+   "periods": 14,
+   "completed": 12,
+   "boots": 111,
+   "min_powered_v": 2.2802507673994867,
+   "energy_harvested_mJ": 66.47158280259502,
+   "energy_to_load_mJ": 37.33086809037801
   },
   {
    "benchmark": "sobel",
@@ -4985,6 +5941,7 @@
     2
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 13,
@@ -5009,6 +5966,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -5033,6 +5991,7 @@
     2
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 13,
@@ -5057,6 +6016,7 @@
     7
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 14,
    "periods": 14,
    "completed": 14,
@@ -5081,6 +6041,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 2,
@@ -5105,6 +6066,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -5129,6 +6091,7 @@
     9
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -5153,6 +6116,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -5177,6 +6141,7 @@
     3
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 5,
@@ -5201,6 +6166,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 6,
@@ -5225,6 +6191,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 7,
@@ -5249,6 +6216,7 @@
     9
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -5273,6 +6241,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 8,
@@ -5297,6 +6266,7 @@
     0
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 9,
@@ -5304,6 +6274,56 @@
    "min_powered_v": 2.2803816270877717,
    "energy_harvested_mJ": 81.29348025957911,
    "energy_to_load_mJ": 51.44875327573881
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "mixed",
+   "deadline_s": 40.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware (e<=0.05)",
+   "completion": 1.0,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.15403589666471762,
+   "spill_mJ": 133.9379452578432,
+   "level_mix": [
+    0,
+    9,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 0,
+   "decisions": 9,
+   "periods": 9,
+   "completed": 9,
+   "boots": 81,
+   "min_powered_v": 2.280385358127411,
+   "energy_harvested_mJ": 58.42793916790615,
+   "energy_to_load_mJ": 27.998411471548167
+  },
+  {
+   "benchmark": "sobel",
+   "scenario": "mixed",
+   "deadline_s": 40.0,
+   "comms_uJ": 0.0,
+   "policy": "bound-aware+defer (e<=0.05)",
+   "completion": 0.8888888888888888,
+   "mean_error": 0.019,
+   "tasks_per_mJ": 0.1445058563834912,
+   "spill_mJ": 137.78664807584218,
+   "level_mix": [
+    0,
+    8,
+    0
+   ],
+   "mid_task_switches": 0,
+   "deferred": 1,
+   "decisions": 9,
+   "periods": 9,
+   "completed": 8,
+   "boots": 75,
+   "min_powered_v": 2.2804461203515363,
+   "energy_harvested_mJ": 55.36107809201527,
+   "energy_to_load_mJ": 24.887387504888476
   },
   {
    "benchmark": "sobel",
@@ -5321,6 +6341,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 6,
@@ -5345,6 +6366,7 @@
     3
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 8,
@@ -5369,6 +6391,7 @@
     1
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 6,
@@ -5393,6 +6416,7 @@
     3
    ],
    "mid_task_switches": 0,
+   "deferred": 0,
    "decisions": 9,
    "periods": 9,
    "completed": 8,
