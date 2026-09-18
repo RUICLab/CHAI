@@ -1,0 +1,61 @@
+
+### sobel  (unlooped solar, radio 200 uJ/period for server rows)
+
+  deadline 8s
+    policy                              radio  compl  per_offered
+    fixed-L1 (no radio, no forecast)       no    64%        0.152  [  +0.0%]
+    on-device slow ewma a=0.02             no    64%        0.145  [  -4.6%]
+    SERVER + ewma (current)               YES    92%        0.038  [ -75.0%]
+    SERVER + CHRONOS                      YES    94%        0.019  [ -87.6%]
+
+  deadline 15s
+    policy                              radio  compl  per_offered
+    fixed-L1 (no radio, no forecast)       no   100%        0.116  [  +0.0%]
+    on-device slow ewma a=0.02             no   100%        0.110  [  -5.5%]
+    SERVER + ewma (current)               YES   100%        0.054  [ -53.3%]
+    SERVER + CHRONOS                      YES   100%        0.054  [ -53.3%]
+
+  deadline 25s
+    policy                              radio  compl  per_offered
+    fixed-L1 (no radio, no forecast)       no   100%        0.067  [  +0.0%]
+    on-device slow ewma a=0.02             no   100%        0.060  [  -9.3%]
+    SERVER + ewma (current)               YES   100%        0.048  [ -27.5%]
+    SERVER + CHRONOS                      YES   100%        0.061  [  -8.9%]
+
+  deadline 40s
+    policy                              radio  compl  per_offered
+    fixed-L1 (no radio, no forecast)       no   100%        0.041  [  +0.0%]
+    on-device slow ewma a=0.02             no   100%        0.039  [  -3.4%]
+    SERVER + ewma (current)               YES   100%        0.036  [ -12.6%]
+    SERVER + CHRONOS                      YES   100%        0.036  [ -10.8%]
+
+### fft  (unlooped solar, radio 200 uJ/period for server rows)
+
+  deadline 8s
+    policy                              radio  compl  per_offered
+    fixed-L1 (no radio, no forecast)       no   100%        0.221  [  +0.0%]
+    on-device slow ewma a=0.02             no    81%        0.182  [ -17.7%]
+    SERVER + ewma (current)               YES    97%        0.111  [ -49.8%]
+    SERVER + CHRONOS                      YES    97%        0.137  [ -38.2%]
+
+  deadline 15s
+    policy                              radio  compl  per_offered
+    fixed-L1 (no radio, no forecast)       no   100%        0.112  [  +0.0%]
+    on-device slow ewma a=0.02             no   100%        0.109  [  -2.6%]
+    SERVER + ewma (current)               YES   100%        0.108  [  -3.0%]
+    SERVER + CHRONOS                      YES   100%        0.109  [  -2.6%]
+
+  deadline 25s
+    policy                              radio  compl  per_offered
+    fixed-L1 (no radio, no forecast)       no   100%        0.065  [  +0.0%]
+    on-device slow ewma a=0.02             no   100%        0.060  [  -7.7%]
+    SERVER + ewma (current)               YES   100%        0.060  [  -7.5%]
+    SERVER + CHRONOS                      YES   100%        0.060  [  -7.3%]
+
+  deadline 40s
+    policy                              radio  compl  per_offered
+    fixed-L1 (no radio, no forecast)       no   100%        0.040  [  +0.0%]
+    on-device slow ewma a=0.02             no   100%        0.035  [ -13.6%]
+    SERVER + ewma (current)               YES   100%        0.035  [ -13.4%]
+    SERVER + CHRONOS                      YES   100%        0.035  [ -13.4%]
+DONE
