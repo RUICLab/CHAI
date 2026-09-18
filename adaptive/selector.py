@@ -305,11 +305,13 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
     mid_task_switches = 0     # must stay 0: levels change only at boundaries
     min_powered_v = float("inf")
     last_completed = True
+    last_delivered = 0.0      # energy the previous period actually delivered
     chosen = []
 
     for k in range(n_steps):
         if k % steps_per_period == 0:                    # decision point
             last_completed = done_this_period
+            last_delivered = period_delivered
             if k > 0 and not done_this_period:
                 missed += 1                              # deadline passed unfinished
             if k > 0 and server is not None:
@@ -326,14 +328,28 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
                                           comms_energy)
             elif reactive and server is None and k > 0:
                 # Start from the last period's outcome, not from a fixed level.
-                # Always restarting at the exact level wastes a tight period
-                # rediscovering that it is unaffordable; always restarting where
-                # the last period ended is too pessimistic when energy is
-                # plentiful. So: climb one level after a success, back off one
-                # after a miss. Mid-task correction no longer exists, so this
-                # boundary decision is the only adaptation reactive control has.
-                current = (max(0, warm_level - 1) if last_completed
-                           else min(len(levels) - 1, warm_level + 1))
+                # Mid-task correction no longer exists, so this boundary
+                # decision is the only adaptation reactive control has.
+                #
+                # Three outcomes, not two. An earlier version climbed after
+                # EVERY success and backed off after every miss, which has no
+                # way to stay put: it succeeded at L1, climbed to L0, could not
+                # finish it, backed off, succeeded, climbed again, producing
+                # decisions [0,1,0,1,...] and missing every other deadline by
+                # construction. That is where reactive's flat ~50% completion
+                # across the whole campaign came from.
+                #
+                # Climbing now needs evidence, not just a success: the energy
+                # actually delivered last period must cover the next level up.
+                # That quantity is the accumulated harvest the device already
+                # measures, so this stays implementable on-device.
+                if not last_completed:
+                    current = min(len(levels) - 1, warm_level + 1)
+                elif (warm_level > 0
+                      and last_delivered >= levels[warm_level - 1].energy):
+                    current = warm_level - 1
+                else:
+                    current = warm_level
             elif server is not None:
                 current = server.decide(levels, history, future, bins_ahead,
                                         deadline_s, params)
