@@ -153,6 +153,89 @@ def verdict(row, ref):
     return "ties"
 
 
+def in_bound_tasks(row, errors, bound):
+    """Completed tasks whose level satisfies the error bound.
+
+    Tasks above the bound score nothing: under "results per joule subject to
+    error <= bound" an out-of-bound result is not a cheaper result, it is not a
+    result. level_mix counts only completed tasks, so this needs no correction
+    for deadline misses.
+    """
+    return sum(c for c, e in zip(row["level_mix"], errors)
+               if e <= bound + 1e-12)
+
+
+def efficiency(row, errors, bound):
+    """The same throughput under three denominators, because they disagree.
+
+    A policy that declines to start tasks keeps the capacitor fuller, so more
+    incoming harvest is rejected while the supply is clamped. That rejected
+    energy leaves `energy_harvested` entirely. Dividing by harvest alone
+    therefore rewards a policy for capturing LESS energy, which looks identical
+    to doing work more efficiently.
+
+      per_harvest  tasks / energy accepted into the capacitor -- the original
+                   metric, and the one open to that artifact.
+      per_load     tasks / energy the MCU actually consumed. This is the direct
+                   test of the defer mechanism: did declining doomed tasks stop
+                   energy being burned for nothing?
+      per_offered  tasks / (harvested + spilled), roughly all the energy the
+                   environment made available. Rejected energy cannot vanish,
+                   so a policy that spills more is charged for it.
+
+    If defer wins on per_load it avoided wasted work. If it wins only on
+    per_harvest the gain is accounting.
+    """
+    n = in_bound_tasks(row, errors, bound)
+    harvested = row["energy_harvested_mJ"]
+    spilled = row.get("spill_mJ", 0.0)
+    load = row["energy_to_load_mJ"]
+    return {
+        "tasks": n,
+        "per_harvest": n / harvested if harvested else 0.0,
+        "per_load": n / load if load else 0.0,
+        "per_offered": n / (harvested + spilled) if (harvested + spilled) else 0.0,
+    }
+
+
+def report_efficiency(cells, levels_by_bench, bound):
+    """Defer and its control, side by side, under all three denominators."""
+    interesting = [n for n in
+                   {p for b in cells.values() for p in b}
+                   if n.startswith("bound-aware")]
+    if not interesting:
+        return
+    print(f"\nEFFICIENCY under three denominators   (error bound {bound})")
+    print("  per_harvest can reward a policy for capturing less energy;")
+    print("  per_load tests the mechanism; per_offered charges for spill.\n")
+    print(f"  {'cell':<30}{'policy':<26}{'compl':>7}{'def':>5}"
+          f"{'/harvest':>10}{'/load':>9}{'/offered':>10}")
+    for key in sorted(cells):
+        if key[3] != 0.0:
+            continue
+        byname = cells[key]
+        errors = [l["error"] for l in levels_by_bench[key[0]]]
+        ref = byname.get("fixed-L1")
+        shown = [("fixed-L1", ref)] if ref else []
+        shown += [(n, byname[n]) for n in sorted(byname) if n.startswith("bound-aware")]
+        base = efficiency(ref, errors, bound) if ref else None
+        for name, row in shown:
+            if row is None:
+                continue
+            e = efficiency(row, errors, bound)
+            tail = ""
+            if base and name != "fixed-L1":
+                def pct(a, b):
+                    return f"{(a / b - 1) * 100:+.1f}%" if b else "   n/a"
+                tail = (f"   [{pct(e['per_harvest'], base['per_harvest'])}"
+                        f" {pct(e['per_load'], base['per_load'])}"
+                        f" {pct(e['per_offered'], base['per_offered'])}]")
+            print(f"  {fmt_key(key):<30}{name:<26}"
+                  f"{row['completion'] * 100:6.0f}%{row.get('deferred', 0):>5}"
+                  f"{e['per_harvest']:>10.3f}{e['per_load']:>9.3f}"
+                  f"{e['per_offered']:>10.3f}{tail}")
+
+
 def main():
     paths = sys.argv[1:] or ["reports/adaptive/results_sobel.json",
                              "reports/adaptive/results_fft.json"]
@@ -226,6 +309,8 @@ def main():
 
     wins = [(k, v) for k, v in headroom.items() if v[3] > TOL or v[4] > TOL]
     print(f"\n  cells with any headroom at all: {len(wins)}/{len(headroom)}")
+    report_efficiency(cells, levels, 0.05)
+
     reactive_wins = sum(1 for k in headroom
                         if REACTIVE in cells[k]
                         and verdict(cells[k][REACTIVE], headroom[k][1])
