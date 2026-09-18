@@ -150,6 +150,37 @@ def policy_bound_aware(bound=ERROR_BOUND):
     return choose
 
 
+def can_finish(level, state, window, k_start, n_period, params, keep_alive,
+               comms_energy=0.0):
+    """Replay one period from the LIVE power state and report whether it lands.
+
+    The scalar test this replaces compared a task's cost against predicted
+    INCOMING harvest alone, so it could refuse to start work while the energy to
+    do that work was already in the capacitor -- at 68 uF a full buffer holds
+    261 uJ against an L1 task's 3111 uJ. Replaying inherits stored charge, the
+    boot thresholds, the supervisor's constant draw, the voltage clamp and spill
+    from the model instead of approximating any of them.
+
+    `window` is the harvest current to assume for the period: the real trace
+    slice for a perfect forecast, a constant at the forecast mean otherwise.
+    """
+    clone = replace(state)
+    task_energy = 0.0
+    paid = 0.0
+    for j in range(min(n_period, len(window))):
+        before = clone.energy_to_load
+        clone.step(window[j], k_start + j, lambda powered: I_ACTIVE,
+                   keep_alive=keep_alive)
+        gained = clone.energy_to_load - before
+        if paid < comms_energy:                  # radio round trip first
+            paid += gained
+            gained = 0.0
+        task_energy += gained
+        if task_energy >= level.energy:
+            return True
+    return False
+
+
 def policy_bound_aware_defer(bound=ERROR_BOUND):
     """Run the cheapest in-bound level when it is affordable; otherwise wait.
 
@@ -320,7 +351,7 @@ class Server:
 
 def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
              bin_s=1.0, context_bins=64, reactive=False, server=None,
-             comms_energy=0.0, hindsight=False):
+             comms_energy=0.0, hindsight=False, state_aware_defer=False):
     """Run the selector over a trace and report what the device achieved."""
     dt = params.timestep
     steps_per_period_pre = int(deadline_s / dt)
@@ -357,6 +388,7 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
     last_completed = True
     last_delivered = 0.0      # energy the previous period actually delivered
     deferred = 0              # periods the policy declined to start a task
+    false_defers = 0          # deferrals where the task would in fact have landed
     chosen = []
 
     for k in range(n_steps):
@@ -411,6 +443,27 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
                 usable = max(0.0, mean_current - params.external_icc)
                 predicted = usable * mean_rail_voltage(params) * deadline_s
                 current = choose(levels, predicted)
+                if state_aware_defer:
+                    idx = cheapest_within_bound(levels)
+                    if idx is not None:
+                        # Replay the period from the live state rather than
+                        # comparing scalars, so stored charge counts.
+                        window = (avail[k:k + steps_per_period]
+                                  if forecast is forecast_oracle
+                                  else np.full(steps_per_period, mean_current))
+                        current = idx if can_finish(
+                            levels[idx], state, window, k, steps_per_period,
+                            params, keep_alive, comms_energy) else DEFER
+
+                # Was a deferral actually necessary? Judged against the REAL
+                # trace, so it is a diagnostic and never feeds the decision.
+                if current == DEFER:
+                    truth = cheapest_within_bound(levels)
+                    if truth is not None and can_finish(
+                            levels[truth], state, avail[k:k + steps_per_period],
+                            k, steps_per_period, params, keep_alive,
+                            comms_energy):
+                        false_defers += 1
             chosen.append(current)
             decisions.append(current)
             period_level = current
@@ -480,6 +533,7 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         "final_v": state.v,
         "energy_to_load_mJ": state.energy_to_load * 1e3,
         "deferred": deferred,
+        "false_defers": false_defers,
         "mid_task_switches": mid_task_switches,
         "min_powered_v": (None if min_powered_v == float("inf") else min_powered_v),
     }
