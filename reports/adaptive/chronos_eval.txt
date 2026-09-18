@@ -1,0 +1,39 @@
+Chronos vs cheap methods, unlooped solar, non-overlapping, held-out
+
+H=8s  select n=16  evaluate n=18
+  method                      select   evaluate
+  persistence                  29.0%      20.9%
+  ewma a=0.3 (current)         27.5%      19.2%
+  ewma a=0.02                  17.0%      15.6%
+  mean 60s                     16.8%      15.7%
+  CHRONOS (median)             21.1%      11.7%
+  CHRONOS q10                  34.4%      29.1%
+
+H=15s  select n=9  evaluate n=10
+  method                      select   evaluate
+  persistence                  32.0%      29.5%
+  ewma a=0.3 (current)         24.7%      19.7%
+  ewma a=0.02                  10.5%       7.4%
+  mean 60s                     10.6%       8.0%
+  CHRONOS (median)             18.2%      12.4%
+  CHRONOS q10                  35.6%      29.2%
+
+H=25s  select n=5  evaluate n=6
+  method                      select   evaluate
+  persistence                  22.2%      25.1%
+  ewma a=0.3 (current)         20.1%      18.5%
+  ewma a=0.02                   8.8%       9.8%
+  mean 60s                      8.5%      10.9%
+  CHRONOS (median)              9.8%      10.8%
+  CHRONOS q10                  44.7%      30.8%
+
+H=40s  select n=3  evaluate n=3
+  method                      select   evaluate
+  persistence                  17.5%      28.0%
+  ewma a=0.3 (current)         14.2%      14.0%
+  ewma a=0.02                  11.9%       6.4%
+  mean 60s                     12.3%       7.9%
+  CHRONOS (median)              4.2%      14.2%
+  CHRONOS q10                  52.9%      31.2%
+
+DONE
