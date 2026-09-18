@@ -291,6 +291,23 @@ def forecast_chronos_q10(history, future, bins_ahead):
     return _chronos_forecast(history, bins_ahead, 0.1)
 
 
+def forecast_ewma_slow(history, future, bins_ahead, alpha=0.02):
+    """Long-memory EWMA. The deployed alpha=0.3 has an effective memory of a few
+    seconds while 64 s of history is available, so it chases fluctuations that do
+    not persist to the 8-40 s horizon the controller actually decides over."""
+    return forecast_ewma(history, future, bins_ahead, alpha=alpha)
+
+
+def forecast_mean_window(seconds):
+    """Flat average of the last `seconds` of harvest. Cheap enough for the MCU:
+    a running sum and a divide, no model."""
+    def fn(history, future, bins_ahead):
+        if not len(history):
+            return 0.0
+        return float(np.asarray(history)[-seconds:].mean())
+    return fn
+
+
 FORECASTERS = {
     "oracle": forecast_oracle,
     "persistence": forecast_persistence,

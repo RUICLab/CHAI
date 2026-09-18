@@ -1,0 +1,111 @@
+Predeclared comparison of cheap forecasters, on honest evaluation windows.
+
+    PYTHONPATH=. python3 -m adaptive.forecast_study
+
+Method list, horizons, and the decision rule below were fixed BEFORE the numbers
+were produced. This is deliberately a selection study, not a campaign: nothing
+here reruns the 512-cell matrix.
+
+Three methodological rules, each fixing a specific way the earlier analysis
+could have fooled itself:
+
+1. NO LOOPING. `simulate()` tiles a 25-52 s recording to fill a 360 s run, so a
+   60 s average would be reading repeated copies of its own past and could look
+   accurate by exploiting periodicity that does not exist in deployment. Every
+   window here comes from the raw recording, used once.
+
+2. NON-OVERLAPPING TARGETS. Sliding a window one second at a time over 300 s of
+   solar yields 284 "samples" that share almost all their data. Targets here are
+   stepped by the full horizon, so no two share a second.
+
+3. HELD-OUT SELECTION. The averaging window is chosen on one portion of the data
+   and scored on another. Picking the best window and reporting its error on the
+   same trace measures nothing.
+====================================================================================================
+
+INDEPENDENT (non-overlapping) TARGETS AVAILABLE
+  horizon      solar   RF pooled   per-RF-trace
+  8s              35          11   RF_1:1  RF_2:3  RF_6:4  RF_7:2  RF_9:1
+  15s             19           4   RF_1:0  RF_2:1  RF_6:2  RF_7:1  RF_9:0
+  25s             11           1   RF_1:0  RF_2:0  RF_6:1  RF_7:0  RF_9:0
+  40s              7           0   RF_1:0  RF_2:0  RF_6:0  RF_7:0  RF_9:0
+
+  RF is underpowered at every horizon the controller uses. Anything
+  below ~10 windows is reported but must not be used to choose a method.
+
+====================================================================================================
+SOLAR, HELD OUT IN TIME: select on 0-150s, evaluate on 150-300s
+  (a genuine session split -- the evaluation half is never seen during selection)
+
+  H=8s   select n=16   evaluate n=18   CHOSEN ON SELECTION HALF: mean 60s
+    method                      select   evaluate
+    persistence                  29.0%      20.9%
+    ewma a=0.3 (current)         27.5%      19.2%
+    ewma a=0.05                  17.8%      16.9%
+    ewma a=0.02                  17.0%      15.6%
+    mean 15s                     19.8%      19.7%
+    mean 30s                     18.1%      17.7%
+    mean 60s                     16.8%      15.7%  <-- chosen
+
+  H=15s   select n=9   evaluate n=10   CHOSEN ON SELECTION HALF: ewma a=0.02
+    method                      select   evaluate
+    persistence                  32.0%      29.5%
+    ewma a=0.3 (current)         24.7%      19.7%
+    ewma a=0.05                  11.1%       8.8%
+    ewma a=0.02                  10.5%       7.4%  <-- chosen
+    mean 15s                     11.2%       9.5%
+    mean 30s                     11.2%       9.5%
+    mean 60s                     10.6%       8.0%
+
+  H=25s   select n=5   evaluate n=6   CHOSEN ON SELECTION HALF: mean 30s
+    method                      select   evaluate
+    persistence                  22.2%      25.1%
+    ewma a=0.3 (current)         20.1%      18.5%
+    ewma a=0.05                   7.2%      11.0%
+    ewma a=0.02                   8.8%       9.8%
+    mean 15s                      9.3%      10.1%
+    mean 30s                      7.1%      12.2%  <-- chosen
+    mean 60s                      8.5%      10.9%
+
+  H=40s   select n=3   evaluate n=3   CHOSEN ON SELECTION HALF: ewma a=0.05
+    method                      select   evaluate
+    persistence                  17.5%      28.0%
+    ewma a=0.3 (current)         14.2%      14.0%
+    ewma a=0.05                   9.2%       6.7%  <-- chosen
+    ewma a=0.02                  11.9%       6.4%
+    mean 15s                     14.4%      12.6%
+    mean 30s                     11.0%       7.6%
+    mean 60s                     12.3%       7.9%
+
+====================================================================================================
+RF, LEAVE-ONE-RECORDING-OUT  (reported for completeness; underpowered)
+
+  H=8s
+    held out    n_train  n_held  chosen on others         error on held-out
+    RF_1             10       1  ewma a=0.05                          35.5%
+    RF_2              8       3  ewma a=0.05                          24.3%
+    RF_6              7       4  ewma a=0.05                          71.5%
+    RF_7              9       2  ewma a=0.05                           9.7%
+    RF_9             10       1  ewma a=0.05                          13.7%
+
+  H=15s
+    held out    n_train  n_held  chosen on others         error on held-out
+    RF_2              3       1  ewma a=0.3 (current)                 19.4%
+    RF_6              2       2  ewma a=0.3 (current)                 22.6%
+    RF_7              3       1  ewma a=0.3 (current)                 13.7%
+
+  H=25s: no usable leave-one-out split (not enough windows)
+
+  H=40s: no usable leave-one-out split (not enough windows)
+
+====================================================================================================
+READ THIS BEFORE USING THE NUMBERS
+  * A method winning here has lower FORECAST error. That is not the same
+    as improving the controller. False-deferral rate, false-run rate and
+    per-offered efficiency decide whether it belongs in the policy.
+  * RF rows are shown for completeness and are underpowered; do not
+    select a method on them.
+  * Nothing here licenses a claim that harvested energy is unpredictable.
+    These traces show little LINEAR, HISTORY-ONLY predictability at these
+    horizons. Nonlinear structure, capacitor state and external signals
+    are untested.
