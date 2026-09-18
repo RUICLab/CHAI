@@ -1,0 +1,111 @@
+Targeted study: does state-aware deferral help, and under which denominator?
+
+    PYTHONPATH=. python3 -m adaptive.defer_study
+
+Not a campaign. Two deadlines, two benchmarks, three forecasters, three
+policies, so the question is answered without another 448-cell run.
+
+What is being tested
+--------------------
+The affordability test used by every predicting policy asks only whether the
+INCOMING harvest over the next period covers a task. It ignores the charge
+already in the capacitor, so it can refuse to start work while the energy to do
+that work is sitting in the buffer. At 68 uF a full capacitor holds 261 uJ
+against an L1 task's 3111 uJ -- about 8% -- so the effect is small here but it
+is a correctness defect, not a tuning choice, and it grows with capacitance.
+
+`policy_state_aware_defer` replaces the scalar comparison with a replay: copy
+the live PowerState, run the period forward, and defer only if the task really
+does not finish. That inherits stored charge, boot thresholds, the supervisor's
+constant draw, the voltage clamp and spill from the model rather than
+approximating any of them.
+
+======================================================================================================================
+
+sobel: cheapest in-bound level is L1 (error 0.019, 3.11 mJ)
+
+  deadline 8s
+    policy                              compl  defer  false   spill  /harvest    /load  /offered
+    -- trace RF_2
+    fixed-L1                              73%      0      0    86.5     0.217    0.265     0.138
+    defer (incoming-only) / perfect       71%     13      2   117.1     0.248    0.321     0.130  [ +14.1% +21.1%  -6.1%]
+    defer (incoming-only) / persistence    64%     10      4   115.8     0.224    0.288     0.118  [  +3.1%  +8.5% -14.6%]
+    defer (incoming-only) / ewma          56%     13      8   129.3     0.211    0.279     0.101  [  -3.1%  +4.9% -27.2%]
+    defer (state-aware) / perfect         76%     11      0   109.5     0.252    0.321     0.139  [ +16.0% +21.1%  +0.5%]
+    defer (state-aware) / persistence     64%     10      4   115.8     0.224    0.288     0.118  [  +3.1%  +8.5% -14.6%]
+    defer (state-aware) / ewma            56%     13      8   129.3     0.211    0.279     0.101  [  -3.1%  +4.9% -27.2%]
+    -- trace RF_6
+    fixed-L1                              33%      0      0    27.3     0.110    0.137     0.092
+    defer (incoming-only) / perfect       36%     29      3   101.1     0.199    0.321     0.088  [ +80.5%+134.5%  -4.0%]
+    defer (incoming-only) / persistence    22%     28      7   106.4     0.132    0.220     0.055  [ +19.8% +60.3% -40.2%]
+    defer (incoming-only) / ewma          18%     32     11   120.0     0.123    0.232     0.043  [ +11.2% +69.5% -53.0%]
+    defer (state-aware) / perfect         42%     26      0    89.7     0.213    0.321     0.106  [ +93.4%+134.5% +15.7%]
+    defer (state-aware) / persistence     22%     28      7   106.4     0.132    0.220     0.055  [ +19.8% +60.3% -40.2%]
+    defer (state-aware) / ewma            20%     31     10   116.2     0.132    0.240     0.049  [ +19.7% +74.9% -46.9%]
+
+  deadline 15s
+    policy                              compl  defer  false   spill  /harvest    /load  /offered
+    -- trace RF_2
+    fixed-L1                             100%      0      0   147.7     0.230    0.321     0.095
+    defer (incoming-only) / perfect      100%      0      0   147.7     0.230    0.321     0.095  [  +0.0%  +0.0%  +0.0%]
+    defer (incoming-only) / persistence    79%      5      5   166.9     0.212    0.321     0.074  [  -7.8%  -0.0% -22.2%]
+    defer (incoming-only) / ewma          88%      3      3   159.2     0.221    0.321     0.083  [  -4.3%  +0.0% -13.4%]
+    defer (state-aware) / perfect        100%      0      0   147.7     0.230    0.321     0.095  [  +0.0%  +0.0%  +0.0%]
+    defer (state-aware) / persistence     83%      4      4   163.1     0.216    0.321     0.078  [  -6.1%  -0.0% -17.8%]
+    defer (state-aware) / ewma            88%      3      3   159.2     0.221    0.321     0.083  [  -4.3%  +0.0% -13.4%]
+    -- trace RF_6
+    fixed-L1                              96%      0      0    70.8     0.224    0.309     0.133
+    defer (incoming-only) / perfect       96%      1      0    74.3     0.230    0.321     0.132  [  +2.6%  +4.0%  -0.5%]
+    defer (incoming-only) / persistence    50%     12     11   116.5     0.177    0.321     0.065  [ -21.0%  +4.0% -50.9%]
+    defer (incoming-only) / ewma          75%      5      5    90.0     0.204    0.306     0.101  [  -8.7%  -1.1% -23.7%]
+    defer (state-aware) / perfect         96%      1      0    74.3     0.230    0.321     0.132  [  +2.6%  +4.0%  -0.5%]
+    defer (state-aware) / persistence     54%     11     10   112.6     0.183    0.321     0.071  [ -18.1%  +4.0% -46.6%]
+    defer (state-aware) / ewma            88%      2      2    78.5     0.217    0.308     0.120  [  -3.1%  -0.4%  -9.6%]
+
+fft: cheapest in-bound level is L1 (error 0.006, 1.91 mJ)
+
+  deadline 8s
+    policy                              compl  defer  false   spill  /harvest    /load  /offered
+    -- trace RF_2
+    fixed-L1                              87%      0      0   138.4     0.351    0.473     0.156
+    defer (incoming-only) / perfect       84%      7      1   150.4     0.370    0.522     0.150  [  +5.6% +10.5%  -3.9%]
+    defer (incoming-only) / persistence    73%      8      6   155.2     0.334    0.479     0.130  [  -4.6%  +1.3% -16.8%]
+    defer (incoming-only) / ewma          73%      7      6   153.3     0.330    0.468     0.130  [  -5.8%  -0.9% -16.6%]
+    defer (state-aware) / perfect         87%      6      0   148.0     0.374    0.522     0.155  [  +6.6% +10.5%  -1.1%]
+    defer (state-aware) / persistence     73%      8      6   155.2     0.334    0.479     0.130  [  -4.6%  +1.3% -16.8%]
+    defer (state-aware) / ewma            76%      6      5   150.9     0.335    0.470     0.135  [  -4.6%  -0.6% -13.8%]
+    -- trace RF_6
+    fixed-L1                              76%      0      0    60.6     0.308    0.411     0.199
+    defer (incoming-only) / perfect       76%     10      1    80.5     0.355    0.510     0.193  [ +15.0% +24.1%  -3.2%]
+    defer (incoming-only) / persistence    40%     23     17   111.7     0.252    0.436     0.098  [ -18.3%  +6.0% -50.6%]
+    defer (incoming-only) / ewma          58%     13      8    90.2     0.296    0.443     0.146  [  -3.9%  +7.7% -26.6%]
+    defer (state-aware) / perfect         78%     10      0    80.1     0.364    0.522     0.199  [ +18.1% +27.1%  -0.2%]
+    defer (state-aware) / persistence     40%     23     17   111.7     0.252    0.436     0.098  [ -18.3%  +6.0% -50.6%]
+    defer (state-aware) / ewma            58%     13      8    90.2     0.296    0.443     0.146  [  -3.9%  +7.7% -26.6%]
+
+  deadline 15s
+    policy                              compl  defer  false   spill  /harvest    /load  /offered
+    -- trace RF_2
+    fixed-L1                             100%      0      0   183.4     0.314    0.522     0.092
+    defer (incoming-only) / perfect      100%      0      0   183.4     0.314    0.522     0.092  [  +0.0%  +0.0%  +0.0%]
+    defer (incoming-only) / persistence    83%      4      4   192.8     0.289    0.522     0.076  [  -8.1%  +0.0% -17.4%]
+    defer (incoming-only) / ewma          92%      2      2   188.1     0.303    0.522     0.084  [  -3.7%  +0.0%  -8.7%]
+    defer (state-aware) / perfect        100%      0      0   183.4     0.314    0.522     0.092  [  +0.0%  +0.0%  +0.0%]
+    defer (state-aware) / persistence     83%      4      4   192.8     0.289    0.522     0.076  [  -8.1%  +0.0% -17.4%]
+    defer (state-aware) / ewma            92%      2      2   188.1     0.303    0.522     0.084  [  -3.7%  +0.0%  -8.7%]
+    -- trace RF_6
+    fixed-L1                             100%      0      0   106.0     0.316    0.522     0.132
+    defer (incoming-only) / perfect      100%      0      0   106.0     0.316    0.522     0.132  [  +0.0%  +0.0%  +0.0%]
+    defer (incoming-only) / persistence    58%     10     10   129.6     0.242    0.522     0.075  [ -23.6%  +0.0% -43.4%]
+    defer (incoming-only) / ewma          96%      1      1   108.4     0.311    0.522     0.126  [  -1.8%  +0.0%  -4.4%]
+    defer (state-aware) / perfect        100%      0      0   106.0     0.316    0.522     0.132  [  +0.0%  +0.0%  +0.0%]
+    defer (state-aware) / persistence     62%      9      9   127.2     0.251    0.522     0.080  [ -20.5%  +0.0% -39.2%]
+    defer (state-aware) / ewma            96%      1      1   108.4     0.311    0.522     0.126  [  -1.8%  +0.0%  -4.4%]
+
+======================================================================================================================
+DECISION RULE (fixed in advance)
+  realistic state-aware runs: 16
+    improved per_load:    13
+    improved per_offered: 0
+  -> COMPUTE-ONLY: improves energy the MCU spends, not whole-system
+     utilisation. Report as a compute-energy optimisation.
