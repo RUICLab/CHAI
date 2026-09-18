@@ -12,9 +12,11 @@ import time
 import numpy as np
 
 from adaptive.power_model import PowerParams, load_trace
-from adaptive.selector import (BENCHMARKS, FORECASTERS, Server, build_levels, forecast_ewma,
-                               forecast_persistence, mixed_trace, policy_affordable,
-                               policy_fixed, simulate, varying_trace)
+from adaptive.selector import (BENCHMARKS, ERROR_BOUND, FORECASTERS, Server, build_levels,
+                               forecast_ewma, forecast_persistence, mixed_trace,
+                               policy_affordable, policy_bound_aware,
+                               policy_bound_aware_defer, policy_fixed, simulate,
+                               varying_trace)
 
 TRACES = ["RF_1", "RF_2", "RF_6", "RF_7", "RF_9"]
 # Tasks got ~3x cheaper with the two-knob level table (L2 is 1.91 mJ, was 5.50),
@@ -38,6 +40,15 @@ def policy_set(levels):
               forecast_persistence, None)]
     # server+reactive was dropped: with mid-task correction gone it takes the
     # server branch at every boundary and is identical to server-learned.
+    # Follow-up experiment, labelled as such: the policies above are all
+    # QUALITY-FIRST -- they pick the most exact level they can afford. Under
+    # "results per joule subject to error <= bound" that is the wrong objective,
+    # because accuracy beyond the bound earns nothing. These two optimise the
+    # graded objective instead, and are separated so the two changes can be told
+    # apart: bound-aware alone, then bound-aware plus the ability to wait.
+    rows += [(f"bound-aware (e<={ERROR_BOUND})", policy_bound_aware(), forecast_ewma, None),
+             (f"bound-aware+defer (e<={ERROR_BOUND})", policy_bound_aware_defer(),
+              forecast_ewma, None)]
     rows += [("server-forecast", policy_affordable(), forecast_ewma, False),
              ("server-learned", policy_affordable(), forecast_ewma, True)]
     return rows
@@ -100,6 +111,7 @@ def main():
                         # Invariants, recorded per cell so the campaign can be
                         # audited from the JSON alone rather than re-run.
                         "mid_task_switches": int(sum(a["mid_task_switches"] for a in agg)),
+                        "deferred": int(sum(a["deferred"] for a in agg)),
                         # decisions is the list of levels chosen, one per
                         # boundary, so its LENGTH is what must equal periods.
                         "decisions": int(sum(len(a["decisions"]) for a in agg)),

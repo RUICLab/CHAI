@@ -116,6 +116,56 @@ def policy_affordable(safety=1.0):
     return choose
 
 
+# Returned by a policy that declines to start a task at all this period.
+DEFER = -1
+
+ERROR_BOUND = 0.05
+
+
+def cheapest_within_bound(levels, bound=ERROR_BOUND):
+    """Index of the least expensive level that still satisfies the error bound.
+
+    This is the level the grading metric actually wants. Under "results per
+    joule subject to error <= bound", accuracy beyond the bound earns nothing,
+    so a more exact level is strictly wasted energy.
+    """
+    ok = [i for i, l in enumerate(levels) if l.error <= bound + 1e-12]
+    if not ok:
+        return None
+    return min(ok, key=lambda i: levels[i].energy)
+
+
+def policy_bound_aware(bound=ERROR_BOUND):
+    """Always run the cheapest level meeting the bound.
+
+    Note what this is: because the level table is static, the answer never
+    changes, so this policy is DETERMINISTICALLY IDENTICAL to fixed-L1 on both
+    benchmarks. It is included as a labelled control -- it isolates "optimise
+    the right objective" from "be able to wait" -- and its agreement with
+    fixed-L1 is a check on the implementation, not a finding.
+    """
+    def choose(levels, predicted_energy, level_index_hint=None):
+        idx = cheapest_within_bound(levels, bound)
+        return len(levels) - 1 if idx is None else idx
+    return choose
+
+
+def policy_bound_aware_defer(bound=ERROR_BOUND):
+    """Run the cheapest in-bound level when it is affordable; otherwise wait.
+
+    Starting a task the period cannot finish burns the whole period's harvest
+    and produces nothing. Waiting keeps that charge in the capacitor for the
+    next period. Deferring is counted as a missed deadline, so this cannot make
+    throughput look better by simply doing less.
+    """
+    def choose(levels, predicted_energy, level_index_hint=None):
+        idx = cheapest_within_bound(levels, bound)
+        if idx is None:
+            return len(levels) - 1
+        return idx if levels[idx].energy <= predicted_energy else DEFER
+    return choose
+
+
 # ---- forecasters: predict mean available current over the next period -------
 
 def forecast_oracle(history, future, bins_ahead):
@@ -306,6 +356,7 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
     min_powered_v = float("inf")
     last_completed = True
     last_delivered = 0.0      # energy the previous period actually delivered
+    deferred = 0              # periods the policy declined to start a task
     chosen = []
 
     for k in range(n_steps):
@@ -364,12 +415,21 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
             decisions.append(current)
             period_level = current
             task_energy = 0.0
-            warm_level = current
+            if current != DEFER:
+                warm_level = current      # DEFER is not a level to warm-start from
+            else:
+                deferred += 1
 
+        # A deferred period draws nothing: the device stays asleep and the
+        # harvest accumulates in the capacitor instead of being spent on a task
+        # that will not finish. MSP430 LPM draw (<1 uA) is negligible beside the
+        # supervisor's constant 25 uA, which PowerState charges regardless, so
+        # modelling the sleeping MCU as 0 A costs nothing in fidelity.
+        idle = done_this_period or current == DEFER
         before_load = state.energy_to_load
         on, i_mcu, _i_in = state.step(
             avail[k], k,
-            lambda powered: (0.0 if done_this_period else I_ACTIVE),
+            lambda powered: (0.0 if idle else I_ACTIVE),
             keep_alive=keep_alive)
         step_energy = state.energy_to_load - before_load
         period_delivered += step_energy
@@ -389,7 +449,7 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
 
         # One result per deadline period: once this period's task is done the
         # device stops working rather than racing ahead into the next one.
-        if on and not done_this_period:
+        if on and not idle:
             if comms_paid < comms_energy:             # radio round trip first
                 comms_paid += step_energy
                 step_energy = 0.0
@@ -419,6 +479,7 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         "boots": state.boots,
         "final_v": state.v,
         "energy_to_load_mJ": state.energy_to_load * 1e3,
+        "deferred": deferred,
         "mid_task_switches": mid_task_switches,
         "min_powered_v": (None if min_powered_v == float("inf") else min_powered_v),
     }
