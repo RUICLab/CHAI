@@ -61,8 +61,19 @@ def check_invariants(rows):
     return bad
 
 
-def check_hindsight_dominates(cells):
-    """No fixed level may beat the boundary oracle inside its own cell."""
+def hindsight_notes(cells):
+    """Cells where a fixed level beat the boundary oracle.
+
+    This is NOT an invariant violation, though an earlier version of this file
+    treated it as one -- contradicting the oracle's own docstring. The boundary
+    oracle maximises each period in isolation, so it can spend charge that a
+    later period needed and finish fewer tasks overall. Sobel never triggered
+    it; fft/mixed at an 8 s deadline does, with cheapest-fixed at 91.1% against
+    the oracle's 88.9%.
+
+    It is reported because it is informative -- it marks cells where per-period
+    greed is actively the wrong strategy -- not because anything is wrong.
+    """
     bad = []
     for key, byname in cells.items():
         hind = byname.get(HINDSIGHT)
@@ -150,7 +161,7 @@ def main():
 
     print(f"{len(rows)} cells from {len(paths)} file(s)\n")
 
-    bad = check_invariants(rows) + check_hindsight_dominates(cells)
+    bad = check_invariants(rows)
     print("INVARIANTS")
     if bad:
         for line in bad[:40]:
@@ -160,8 +171,16 @@ def main():
         print(f"\n  {len(bad)} VIOLATIONS -- results are not trustworthy\n")
     else:
         print("  all pass: no mid-task switches, decisions == periods, "
-              "completion in range,\n  energy conserved, no fixed level beats "
-              "the boundary oracle\n")
+              "completion in range,\n  energy conserved\n")
+
+    notes = hindsight_notes(cells)
+    if notes:
+        print("NOTE  per-period greed loses to a fixed level in these cells.")
+        print("      Expected: the boundary oracle optimises each period alone,")
+        print("      so it can spend charge a later period needed.")
+        for line in notes:
+            print(f"        {line}")
+        print()
 
     # What the oracle says is available, cell by cell. This is the headroom any
     # realisable policy is competing for; where it is zero there is nothing to win.

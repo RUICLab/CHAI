@@ -5,11 +5,14 @@ versions of these tests exercised PowerState directly, or asserted identities
 that held regardless of the behaviour they claimed to check.
 """
 
+from dataclasses import replace
+
 import numpy as np
 
 from adaptive.power_model import PowerParams, PowerState, hold_until, simulate as power_simulate
 from adaptive.selector import (I_ACTIVE, SOBEL_LEVELS, V_RELEASE, build_levels,
-                               forecast_persistence, policy_fixed, simulate)
+                               forecast_persistence, hindsight_level,
+                               policy_fixed, simulate)
 
 P = PowerParams()
 LEVELS = build_levels(P, SOBEL_LEVELS)
@@ -79,28 +82,54 @@ def test_selector_power_dynamics_match_the_standalone_power_model():
                       rtol=0, atol=1e-12)
 
 
-def test_hindsight_beats_every_fixed_level_at_each_deadline():
-    """A boundary hindsight oracle must never be beaten, at any deadline, by a
-    policy that picks one level and keeps it.
+def test_hindsight_picks_the_best_level_the_period_could_afford():
+    """The oracle's contract is per-period: given the energy this period will
+    actually deliver, choose the highest-quality level that fits, or the
+    cheapest if none does.
 
-    Completion first; when completion ties, error decides. The earlier version
-    checked completion on a single deadline, so a hindsight run that met the
-    same deadlines with worse output would have passed.
+    That is ALL it guarantees. An earlier version of this test asserted the
+    global property -- that no fixed level ever beats hindsight on completion --
+    which contradicts the oracle's own docstring and is false: on
+    fft/mixed at an 8 s deadline the cheapest fixed level completes 91.1%
+    against the oracle's 88.9%, because per-period greed spends charge a later
+    period needed. Do not reinstate that assertion.
     """
-    for deadline in (10.0, 30.0, 60.0):
-        hind = _run(deadline_s=deadline, hindsight=True)
-        for name in ("L0", "L1", "L2"):
-            fixed = _run(deadline_s=deadline, choose=policy_fixed(name))
-            assert hind["completion_rate"] >= fixed["completion_rate"] - 1e-9, (
-                f"deadline {deadline}s: hindsight {hind['completion_rate']:.3f} "
-                f"< fixed-{name} {fixed['completion_rate']:.3f}")
-            if abs(hind["completion_rate"] - fixed["completion_rate"]) < 1e-9:
-                he = hind["mean_error"]
-                fe = fixed["mean_error"]
-                if not (np.isnan(he) or np.isnan(fe)):
-                    assert he <= fe + 1e-9, (
-                        f"deadline {deadline}s: completion ties but hindsight "
-                        f"error {he:.4f} > fixed-{name} {fe:.4f}")
+    # These (period, current) pairs were chosen so the three cases below land on
+    # three DIFFERENT levels. The first version of this test used a 0.3 s period
+    # and delivered 0.00 mJ every time, so every case fell through to the
+    # cheapest level and the assertion held no matter what the function did.
+    cases = [(40000, 1.5e-4),      # 4 s, 150 uA ->  0.83 mJ, affords nothing
+             (80000, 2.0e-4),      # 8 s, 200 uA ->  3.51 mJ, affords L1
+             (150000, 4.0e-4)]     # 15 s, 400 uA -> 15.65 mJ, affords L0
+    seen = set()
+    for n_period, current in cases:
+        state = PowerState(P)
+        avail = np.full(n_period + 10, current)
+
+        # Energy this period delivers, measured with the shared power model.
+        clone = replace(state)
+        delivered = 0.0
+        for j in range(n_period):
+            before = clone.energy_to_load
+            clone.step(avail[j], j, lambda powered: I_ACTIVE,
+                       keep_alive=hold_until(V_RELEASE))
+            delivered += clone.energy_to_load - before
+
+        idx = hindsight_level(LEVELS, state, avail, 0, n_period, P,
+                              hold_until(V_RELEASE), 0.0)
+        seen.add(idx)
+
+        affordable = [i for i, l in enumerate(LEVELS) if l.energy <= delivered]
+        expected = min(affordable) if affordable else len(LEVELS) - 1
+        assert idx == expected, (
+            f"{n_period * P.timestep:.0f}s at {current * 1e6:.0f}uA delivered "
+            f"{delivered * 1e3:.2f} mJ: chose {LEVELS[idx].name}, best "
+            f"affordable was {LEVELS[expected].name} "
+            f"(costs {[round(l.energy * 1e3, 2) for l in LEVELS]} mJ)")
+
+    assert seen == {0, 1, 2}, (
+        f"cases only exercised levels {sorted(seen)}; the test is vacuous "
+        "unless all three are reached")
 
 
 def test_level_zero_is_the_declared_identity():
