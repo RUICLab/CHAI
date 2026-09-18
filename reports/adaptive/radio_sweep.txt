@@ -1,0 +1,178 @@
+How cheap must a server query be before server forecasting pays for itself?
+
+    PYTHONPATH=. python3 -m adaptive.radio_sweep
+
+Sensitivity analysis on ONE solar recording, 295 s of a 300 s capture so nothing
+loops. Not a campaign, and not proof that any particular radio will work: real
+link energy, latency and retries need hardware measurement.
+
+SCOPE. This measures one architecture -- a server query per decision period.
+Batching several periods into one query, querying only on unusual conditions, or
+piggybacking on traffic the device already sends would amortise the cost
+differently and are untested here.
+
+LATENCY IS ZERO, with no packet loss and no retransmission, so every number is
+the server's BEST case. Real latency and retries move break-even lower.
+
+THREE DEFECTS THIS VERSION FIXES, each of which made an earlier sweep unusable:
+
+  * `learn=True` was unsound. The server calibrated on energy CONSUMED, which is
+    censored: deferring, finishing early, or picking a cheap level all lower it.
+    The learner read "I chose not to spend energy" as "no energy was there" and
+    spiralled. On sobel/8s at free communication it hit the 0.05 floor and
+    produced 2 in-bound tasks where the same server unlearned produced 13. Every
+    run here uses learn=False, so radio cost is isolated from calibration.
+  * A "defer" reply was free. Radio was charged only while a task ran, so at
+    200 uJ with 34 deferrals the device paid 0.40 mJ instead of ~7.2 mJ. The
+    query is now owed for the period whatever the server replies.
+  * Zero-cost queries were counted as zero queries.
+
+Because calibration used to react to radio spending, per-offered efficiency ROSE
+with radio cost in some cells -- which silently broke the monotonicity that
+break-even search assumes. Monotonicity is now checked and reported, not assumed.
+
+PROTOCOL:
+  Stage 1  every benchmark/deadline at 0 uJ. A cell that loses with FREE
+           communication has no break-even, and is not swept further.
+  Stage 2  only cells that beat a baseline at 0 uJ get the cost sweep and a
+           binary-search break-even.
+
+PREDECLARED READING OF BREAK-EVEN:
+    above 200 uJ   conventional low-power radio viable
+    10 - 200 uJ    needs a cheaper or amortised communication design
+    below 10 uJ    needs specialised backscatter / piggybacking
+    none           server forecasting offers no efficiency value in that cell
+================================================================================================================
+
+STAGE 1 -- FREE COMMUNICATION (0 uJ). A cell that loses here has no
+break-even at any price, so it is not swept.
+
+  sobel / 8s      fixed-L1 per_offered=0.1518 in-bound=23/36   |   slow-ewma per_offered=0.1449 in-bound=22
+    variant                           per_off  in-bnd  out-bnd  defer  queries   vs fixed / vs slow
+    server+ewma quality-first          0.0829      13       17      0       36     -45.4% /   -42.7%
+    server+ewma bound-aware            0.0785      13        0     17       36     -48.3% /   -45.8%
+    server+chronos quality-first       0.1026      16       15      0       36     -32.4% /   -29.2%
+    server+chronos bound-aware         0.0977      16        0     15       36     -35.7% /   -32.6%
+
+  sobel / 15s      fixed-L1 per_offered=0.1160 in-bound=19/19   |   slow-ewma per_offered=0.1097 in-bound=18
+    variant                           per_off  in-bnd  out-bnd  defer  queries   vs fixed / vs slow
+    server+ewma quality-first          0.1097      18        1      0       19      -5.5% /    +0.0%
+    server+ewma bound-aware            0.1094      18        0      1       19      -5.7% /    -0.3%
+    server+chronos quality-first       0.1097      18        1      0       19      -5.5% /    +0.0%
+    server+chronos bound-aware         0.1094      18        0      1       19      -5.7% /    -0.3%
+
+  sobel / 25s      fixed-L1 per_offered=0.0666 in-bound=11/11   |   slow-ewma per_offered=0.0604 in-bound=10
+    variant                           per_off  in-bnd  out-bnd  defer  queries   vs fixed / vs slow
+    server+ewma quality-first          0.0604      10        1      0       11      -9.3% /    +0.0%
+    server+ewma bound-aware            0.0602      10        0      1       11      -9.5% /    -0.3%
+    server+chronos quality-first       0.0604      10        1      0       11      -9.3% /    +0.0%
+    server+chronos bound-aware         0.0602      10        0      1       11      -9.5% /    -0.3%
+
+  sobel / 40s      fixed-L1 per_offered=0.0408 in-bound=7/7   |   slow-ewma per_offered=0.0394 in-bound=6
+    variant                           per_off  in-bnd  out-bnd  defer  queries   vs fixed / vs slow
+    server+ewma quality-first          0.0363       6        1      0        7     -11.1% /    -7.9%
+    server+ewma bound-aware            0.0362       6        0      1        7     -11.4% /    -8.2%
+    server+chronos quality-first       0.0386       6        1      0        7      -5.5% /    -2.1%
+    server+chronos bound-aware         0.0385       6        0      1        7      -5.8% /    -2.4%
+
+  fft / 8s      fixed-L1 per_offered=0.2212 in-bound=36/36   |   slow-ewma per_offered=0.1821 in-bound=28
+    variant                           per_off  in-bnd  out-bnd  defer  queries   vs fixed / vs slow
+    server+ewma quality-first          0.1848      29        1      0       36     -16.5% /    +1.5%   <-- SWEEP
+    server+ewma bound-aware            0.1843      29        0      1       36     -16.7% /    +1.2%   <-- SWEEP
+    server+chronos quality-first       0.1977      31        2      0       36     -10.7% /    +8.6%   <-- SWEEP
+    server+chronos bound-aware         0.1967      31        0      2       36     -11.1% /    +8.0%   <-- SWEEP
+
+  fft / 15s      fixed-L1 per_offered=0.1117 in-bound=19/19   |   slow-ewma per_offered=0.1088 in-bound=18
+    variant                           per_off  in-bnd  out-bnd  defer  queries   vs fixed / vs slow
+    server+ewma quality-first          0.1088      18        1      0       19      -2.6% /    +0.0%
+    server+ewma bound-aware            0.1086      18        0      1       19      -2.8% /    -0.2%
+    server+chronos quality-first       0.1088      18        1      0       19      -2.6% /    +0.0%
+    server+chronos bound-aware         0.1086      18        0      1       19      -2.8% /    -0.2%
+
+  fft / 25s      fixed-L1 per_offered=0.0651 in-bound=11/11   |   slow-ewma per_offered=0.0601 in-bound=10
+    variant                           per_off  in-bnd  out-bnd  defer  queries   vs fixed / vs slow
+    server+ewma quality-first          0.0601      10        1      0       11      -7.7% /    +0.0%
+    server+ewma bound-aware            0.0599      10        0      1       11      -7.9% /    -0.2%
+    server+chronos quality-first       0.0601      10        1      0       11      -7.7% /    +0.0%
+    server+chronos bound-aware         0.0599      10        0      1       11      -7.9% /    -0.2%
+
+  fft / 40s      fixed-L1 per_offered=0.0403 in-bound=7/7   |   slow-ewma per_offered=0.0348 in-bound=6
+    variant                           per_off  in-bnd  out-bnd  defer  queries   vs fixed / vs slow
+    server+ewma quality-first          0.0348       6        1      0        7     -13.6% /    +0.0%
+    server+ewma bound-aware            0.0347       6        0      1        7     -13.8% /    -0.2%
+    server+chronos quality-first       0.0348       6        1      0        7     -13.6% /    +0.0%
+    server+chronos bound-aware         0.0347       6        0      1        7     -13.8% /    -0.2%
+
+================================================================================================================
+
+STAGE 2 -- cost sweep for the 4 cell(s) that won at 0 uJ
+
+  fft / 8s / server+ewma quality-first
+     cost uJ  per_off  in-bnd  radio mJ  queries   vs fixed / vs slow
+           0   0.1848      29      0.00       36     -16.5% /    +1.5%
+           1   0.1848      29      0.04       36     -16.5% /    +1.5%
+           2   0.1848      29      0.07       36     -16.5% /    +1.5%
+           5   0.1848      29      0.19       36     -16.5% /    +1.5%
+          10   0.1849      29      0.36       36     -16.4% /    +1.5%
+          20   0.1850      29      0.73       36     -16.4% /    +1.6%
+          50   0.1853      29      1.81       36     -16.2% /    +1.8%
+         100   0.1859      29      3.61       36     -16.0% /    +2.1%
+         200   0.1868      29      7.20       36     -15.6% /    +2.6%
+    NOT MONOTONE between [(0, 1), (1, 2), (2, 5), (5, 10), (10, 20), (20, 50), (50, 100), (100, 200)]: break-even search assumes
+    efficiency falls as radio gets dearer. Treat the value below as unreliable.
+    break-even vs fixed-L1  : NO BREAK-EVEN
+    break-even vs slow-ewma : > 200 uJ (conventional low-power radio viable)
+
+  fft / 8s / server+ewma bound-aware
+     cost uJ  per_off  in-bnd  radio mJ  queries   vs fixed / vs slow
+           0   0.1843      29      0.00       36     -16.7% /    +1.2%
+           1   0.1843      29      0.04       36     -16.7% /    +1.2%
+           2   0.1843      29      0.07       36     -16.7% /    +1.3%
+           5   0.1844      29      0.19       36     -16.7% /    +1.3%
+          10   0.1844      29      0.36       36     -16.6% /    +1.3%
+          20   0.1845      29      0.73       36     -16.6% /    +1.4%
+          50   0.1848      29      1.81       36     -16.4% /    +1.5%
+         100   0.1854      29      3.61       36     -16.2% /    +1.8%
+         200   0.1863      29      7.20       36     -15.8% /    +2.3%
+    NOT MONOTONE between [(0, 1), (1, 2), (2, 5), (5, 10), (10, 20), (20, 50), (50, 100), (100, 200)]: break-even search assumes
+    efficiency falls as radio gets dearer. Treat the value below as unreliable.
+    break-even vs fixed-L1  : NO BREAK-EVEN
+    break-even vs slow-ewma : > 200 uJ (conventional low-power radio viable)
+
+  fft / 8s / server+chronos quality-first
+     cost uJ  per_off  in-bnd  radio mJ  queries   vs fixed / vs slow
+           0   0.1977      31      0.00       36     -10.7% /    +8.6%
+           1   0.1977      31      0.04       36     -10.7% /    +8.6%
+           2   0.1977      31      0.07       36     -10.6% /    +8.6%
+           5   0.1977      31      0.19       36     -10.6% /    +8.6%
+          10   0.1978      31      0.36       36     -10.6% /    +8.6%
+          20   0.1979      31      0.73       36     -10.6% /    +8.7%
+          50   0.1982      31      1.81       36     -10.4% /    +8.9%
+         100   0.1989      31      3.61       36     -10.1% /    +9.2%
+         200   0.2000      31      7.20       36      -9.6% /    +9.9%
+    NOT MONOTONE between [(0, 1), (1, 2), (2, 5), (5, 10), (10, 20), (20, 50), (50, 100), (100, 200)]: break-even search assumes
+    efficiency falls as radio gets dearer. Treat the value below as unreliable.
+    break-even vs fixed-L1  : NO BREAK-EVEN
+    break-even vs slow-ewma : > 200 uJ (conventional low-power radio viable)
+
+  fft / 8s / server+chronos bound-aware
+     cost uJ  per_off  in-bnd  radio mJ  queries   vs fixed / vs slow
+           0   0.1967      31      0.00       36     -11.1% /    +8.0%
+           1   0.1967      31      0.04       36     -11.1% /    +8.0%
+           2   0.1967      31      0.07       36     -11.1% /    +8.0%
+           5   0.1968      31      0.19       36     -11.1% /    +8.1%
+          10   0.1968      31      0.36       36     -11.0% /    +8.1%
+          20   0.1969      31      0.73       36     -11.0% /    +8.2%
+          50   0.1972      31      1.81       36     -10.9% /    +8.3%
+         100   0.1978      31      3.61       36     -10.6% /    +8.7%
+         200   0.1990      31      7.20       36     -10.1% /    +9.3%
+    NOT MONOTONE between [(0, 1), (1, 2), (2, 5), (5, 10), (10, 20), (20, 50), (50, 100), (100, 200)]: break-even search assumes
+    efficiency falls as radio gets dearer. Treat the value below as unreliable.
+    break-even vs fixed-L1  : NO BREAK-EVEN
+    break-even vs slow-ewma : > 200 uJ (conventional low-power radio viable)
+
+================================================================================================================
+learn=False throughout. Zero latency, no loss, no retransmission.
+One solar recording. In-bound completion counts only levels inside the
+error bound; out-of-bound results score zero and are shown separately.
+DONE

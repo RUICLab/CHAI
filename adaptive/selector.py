@@ -335,30 +335,60 @@ class Server:
     cannot separate the two levels it must choose between.
     """
 
-    def __init__(self, forecast, learn=True, alpha=0.3):
+    def __init__(self, forecast, learn=True, alpha=0.3, bound=None):
         self.forecast = forecast
         self.learn = learn
         self.alpha = alpha
         self.ratio = 1.0
         self.pending = None
         self.last_level = 0
+        # When set, the server only ever selects levels inside the error bound,
+        # and DEFERS rather than shipping output the metric scores as zero. The
+        # default (None) keeps the original quality-first behaviour: pick the
+        # most exact AFFORDABLE level, which falls through to the cheapest one
+        # when energy is tight -- and the cheapest level is out of bound, so it
+        # earns nothing. That is why the server looked catastrophic even at zero
+        # radio cost: 32 of its 35 completed tasks were out-of-bound L2.
+        self.bound = bound
 
     def decide(self, levels, history, future, bins_ahead, deadline_s, params):
         mean_current = self.forecast(history, future, bins_ahead)
         usable = max(0.0, mean_current - params.external_icc)
         raw = usable * mean_rail_voltage(params) * deadline_s
         predicted = raw * self.ratio
+        self.pending = raw
+        if self.bound is not None:
+            allowed = [i for i, l in enumerate(levels)
+                       if l.error <= self.bound + 1e-12]
+            if allowed:
+                for i in allowed:                       # most exact first
+                    if levels[i].energy <= predicted:
+                        self.last_level = i
+                        return i
+                return DEFER            # nothing in bound is affordable: wait
         for i, level in enumerate(levels):
             if level.energy <= predicted:
                 self.last_level = i
                 break
         else:
             self.last_level = len(levels) - 1
-        self.pending = raw
         return self.last_level
 
     def observe(self, delivered):
-        """Feedback from the device: energy that actually reached the MCU."""
+        """Feedback from the device: energy that actually reached the MCU.
+
+        WARNING -- this signal is CENSORED, and `learn=True` is unsound because
+        of it. What the device reports is energy CONSUMED, not energy AVAILABLE:
+        finishing early, deferring, or picking a cheap level all lower it, while
+        radio traffic raises it. The learner therefore reads "I chose not to
+        spend energy" as "no energy was there", drives `ratio` down, and defers
+        or drops to the cheapest level even more -- a self-reinforcing loop. On
+        sobel/8s with free communication it collapsed to the 0.05 floor and
+        produced 2 in-bound tasks where the same server unlearned produced 13.
+
+        Measuring availability needs an uncensored signal, e.g. capacitor
+        voltage or harvest current sampled while idle. Until then use
+        learn=False."""
         if not self.learn or not self.pending or self.pending <= 0:
             return
         observed = delivered / self.pending
@@ -397,6 +427,8 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
     executed = []
     period_delivered = 0.0
     comms_paid = 0.0
+    comms_paid_total = 0.0    # radio energy the device actually spent
+    queries = 0               # server round trips attempted (one per period)
     warm_level = 0
     decisions = []            # level chosen at each period boundary
     period_level = 0
@@ -417,7 +449,10 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
             if k > 0 and server is not None:
                 server.observe(period_delivered)     # device reports the outcome
             period_delivered = 0.0
+            comms_paid_total += comms_paid
             comms_paid = 0.0
+            if server is not None:      # count it even when modelled as free
+                queries += 1
             done_this_period = False
             bin_now = k // steps_per_bin
             history = binned[max(0, bin_now - context_bins):bin_now]
@@ -495,7 +530,12 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         # that will not finish. MSP430 LPM draw (<1 uA) is negligible beside the
         # supervisor's constant 25 uA, which PowerState charges regardless, so
         # modelling the sleeping MCU as 0 A costs nothing in fidelity.
-        idle = done_this_period or current == DEFER
+        # The radio round trip is owed for the period regardless of what the
+        # server replied. Paying it only while a task ran made a "defer" reply
+        # free: at 200 uJ with 34 deferrals the device was charged 0.40 mJ
+        # instead of ~7.2 mJ, so deferral looked far cheaper than it is.
+        owes_comms = comms_energy > 0.0 and comms_paid < comms_energy
+        idle = (done_this_period or current == DEFER) and not owes_comms
         before_load = state.energy_to_load
         on, i_mcu, _i_in = state.step(
             avail[k], k,
@@ -519,10 +559,11 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
 
         # One result per deadline period: once this period's task is done the
         # device stops working rather than racing ahead into the next one.
-        if on and not idle:
+        if on:
             if comms_paid < comms_energy:             # radio round trip first
                 comms_paid += step_energy
                 step_energy = 0.0
+        if on and not idle and current != DEFER and not done_this_period:
             task_energy += step_energy
             if task_energy >= levels[current].energy:
                 completed += 1
@@ -550,6 +591,8 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         "final_v": state.v,
         "energy_to_load_mJ": state.energy_to_load * 1e3,
         "deferred": deferred,
+        "comms_paid_mJ": (comms_paid_total + comms_paid) * 1e3,
+        "queries": queries,
         "false_defers": false_defers,
         "mid_task_switches": mid_task_switches,
         "min_powered_v": (None if min_powered_v == float("inf") else min_powered_v),
