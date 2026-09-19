@@ -398,7 +398,8 @@ class Server:
 
 def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
              bin_s=1.0, context_bins=64, reactive=False, server=None,
-             comms_energy=0.0, hindsight=False, state_aware_defer=False):
+             comms_energy=0.0, hindsight=False, state_aware_defer=False,
+             voltage_policy=None):
     """Run the selector over a trace and report what the device achieved."""
     dt = params.timestep
     steps_per_period_pre = int(deadline_s / dt)
@@ -490,6 +491,10 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
                                         deadline_s, params)
             # Energy reaching the MCU over the period: the supervisor's constant
             # draw is paid first, and only the remainder does useful work.
+            elif voltage_policy is not None:
+                # No forecast, no radio, no history: read the capacitor and look
+                # the answer up. The device already knows this voltage.
+                current = voltage_policy(levels, state.v)
             else:
                 mean_current = forecast(history, future, bins_ahead)
                 usable = max(0.0, mean_current - params.external_icc)
