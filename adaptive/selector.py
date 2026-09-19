@@ -401,7 +401,7 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
              bin_s=1.0, context_bins=64, reactive=False, server=None,
              comms_energy=0.0, hindsight=False, state_aware_defer=False,
              voltage_policy=None, rate_policy=None, greedy=False,
-             hindsight_defer=False):
+             hindsight_defer=False, initial_v=0.0):
     """Run the selector over a trace and report what the device achieved."""
     dt = params.timestep
     steps_per_period_pre = int(deadline_s / dt)
@@ -422,6 +422,11 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
     # build_levels priced tasks assuming discharge to 2.283 V -- roughly a 10x
     # mismatch that invalidated every run built on it.
     state = PowerState(params)
+    # Warm start: begin already charged, so a run measures steady-state
+    # behaviour instead of paying the one-off cost of filling the capacitor.
+    # That cost scales with C and dominates large-capacitor runs.
+    state.v = state.v_prev = initial_v
+    state.on = initial_v > params.v_on
     keep_alive = hold_until(V_RELEASE)
     task_energy = 0.0
     done_this_period = False
@@ -441,6 +446,7 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
     last_delivered = 0.0      # energy the previous period actually delivered
     deferred = 0              # periods the policy declined to start a task
     false_defers = 0          # deferrals where the task would in fact have landed
+    first_boot_step = None    # when the device first powered up (startup latency)
     chosen = []
 
     for k in range(n_steps):
@@ -565,6 +571,8 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         step_energy = state.energy_to_load - before_load
         period_delivered += step_energy
         if on:
+            if first_boot_step is None:
+                first_boot_step = k
             min_powered_v = min(min_powered_v, state.v)
         if current != period_level:
             mid_task_switches += 1
@@ -617,6 +625,7 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         "comms_paid_mJ": (comms_paid_total + comms_paid) * 1e3,
         "queries": queries,
         "false_defers": false_defers,
+        "startup_s": (None if first_boot_step is None else first_boot_step * dt),
         "mid_task_switches": mid_task_switches,
         "min_powered_v": (None if min_powered_v == float("inf") else min_powered_v),
     }
