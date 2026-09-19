@@ -399,7 +399,7 @@ class Server:
 def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
              bin_s=1.0, context_bins=64, reactive=False, server=None,
              comms_energy=0.0, hindsight=False, state_aware_defer=False,
-             voltage_policy=None):
+             voltage_policy=None, rate_policy=None):
     """Run the selector over a trace and report what the device achieved."""
     dt = params.timestep
     steps_per_period_pre = int(deadline_s / dt)
@@ -491,6 +491,14 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
                                         deadline_s, params)
             # Energy reaching the MCU over the period: the supervisor's constant
             # draw is paid first, and only the remainder does useful work.
+            elif rate_policy is not None:
+                # "Energy coming in fast -> exact; slow -> approximate." The
+                # input is a MEASUREMENT of recent harvest, not a prediction of
+                # future harvest, and no energy model or calibration sits
+                # between it and the decision -- the table is learned directly
+                # from which level actually worked at that rate.
+                recent = float(np.mean(history[-30:])) if len(history) else 0.0
+                current = rate_policy(levels, recent)
             elif voltage_policy is not None:
                 # No forecast, no radio, no history: read the capacitor and look
                 # the answer up. The device already knows this voltage.

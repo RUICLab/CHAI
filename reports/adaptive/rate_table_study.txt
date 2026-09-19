@@ -1,0 +1,53 @@
+### sobel   bound 0.05   (in bound: L0, L1)
+  deadline method              chosen on select            HELD-OUT per_off  in-bnd
+  8s       best fixed          L1                                    0.1586      12
+           rate table          hi=230uA lo=120uA                     0.1447      11   [  -8.7%]  mix=[0, 11, 1]
+  15s      best fixed          L1                                    0.1169       9
+           rate table          hi=220uA lo=120uA                     0.1035       8   [ -11.5%]  mix=[0, 8, 1]
+  25s      best fixed          L1                                    0.0665       5
+           rate table          hi=200uA lo=120uA                     0.0530       4   [ -20.3%]  mix=[0, 4, 1]
+  40s      best fixed          L0                                    0.0478       3
+           rate table          hi=120uA lo=120uA                     0.0301       2   [ -37.0%]  mix=[2, 0, 1]
+
+
+### sobel   bound 0.3   (in bound: L0, L1, L2)
+  deadline method              chosen on select            HELD-OUT per_off  in-bnd
+  8s       best fixed          L2                                    0.2215      18
+           rate table          hi=230uA lo=200uA                     0.1989      16   [ -10.2%]  mix=[0, 1, 15]
+  15s      best fixed          L1                                    0.1169       9
+           rate table          hi=220uA lo=120uA                     0.1164       9   [  -0.4%]  mix=[0, 8, 1]
+  25s      best fixed          L1                                    0.0665       5
+           rate table          hi=200uA lo=120uA                     0.0663       5   [  -0.4%]  mix=[0, 4, 1]
+  40s      best fixed          L0                                    0.0478       3
+           rate table          hi=120uA lo=120uA                     0.0452       3   [  -5.5%]  mix=[2, 0, 1]
+
+
+### fft   bound 0.05   (in bound: L0, L1)
+  deadline method              chosen on select            HELD-OUT per_off  in-bnd
+  8s       best fixed          L1                                    0.2215      18
+           rate table          hi=200uA lo=120uA                     0.1860      15   [ -16.0%]  mix=[1, 14, 1]
+  15s      best fixed          L0                                    0.1160       9
+           rate table          hi=120uA lo=120uA                     0.1026       8   [ -11.6%]  mix=[8, 0, 1]
+  25s      best fixed          L0                                    0.0662       5
+           rate table          hi=120uA lo=120uA                     0.0527       4   [ -20.4%]  mix=[4, 0, 1]
+  40s      best fixed          L0                                    0.0412       3
+           rate table          hi=120uA lo=120uA                     0.0273       2   [ -33.7%]  mix=[2, 0, 1]
+
+
+### fft   bound 0.3   (in bound: L0, L1, L2)
+  deadline method              chosen on select            HELD-OUT per_off  in-bnd
+  8s       best fixed          L1                                    0.2215      18
+           rate table          hi=200uA lo=120uA                     0.1984      16   [ -10.4%]  mix=[1, 14, 1]
+  15s      best fixed          L0                                    0.1160       9
+           rate table          hi=120uA lo=120uA                     0.1154       9   [  -0.5%]  mix=[8, 0, 1]
+  25s      best fixed          L0                                    0.0662       5
+           rate table          hi=120uA lo=120uA                     0.0659       5   [  -0.5%]  mix=[4, 0, 1]
+  40s      best fixed          L0                                    0.0412       3
+           rate table          hi=120uA lo=120uA                     0.0410       3   [  -0.5%]  mix=[2, 0, 1]
+
+========================================================================================================
+rate table beat the best fixed level in 0 of 16 cells
+One solar recording, thresholds and comparator both chosen on its
+first half. Shows whether the idea is worth pursuing, not that it
+generalises to RF or to other harvesters.
+DONE
