@@ -1,0 +1,43 @@
+greedy mode added
+One result per period vs work-until-the-period-ends (solar, 295s)
+
+### sobel
+   deadline        policy   tasks  in-bnd(0.30)  spill mJ  per_offered
+         8s            L1      23            23      21.4       0.1518
+         8s     L1-greedy      24            24       0.0       0.1640
+         8s            L2      36            36      70.4       0.2212
+         8s     L2-greedy      47            47       0.0       0.3211
+        15s            L1      19            19      81.0       0.1160
+        15s     L1-greedy      33            33       0.0       0.2273
+        15s            L2      19            19     109.2       0.1117
+        15s     L2-greedy      55            55       0.0       0.3789
+        25s            L1      11            11     107.4       0.0666
+        25s     L1-greedy      34            34       0.0       0.2412
+        25s            L2      11            11     123.7       0.0651
+        25s     L2-greedy      59            59       0.0       0.4185
+        40s            L1       7             7     125.1       0.0408
+        40s     L1-greedy      37            37       0.0       0.2583
+        40s            L2       7             7     135.5       0.0403
+        40s     L2-greedy      61            61       0.0       0.4258
+
+### fft
+   deadline        policy   tasks  in-bnd(0.30)  spill mJ  per_offered
+         8s            L1      36            36      70.4       0.2212
+         8s     L1-greedy      47            47       0.0       0.3211
+         8s            L2      36            36      91.7       0.2149
+         8s     L2-greedy      68            68       0.0       0.4646
+        15s            L1      19            19     109.2       0.1117
+        15s     L1-greedy      55            55       0.0       0.3789
+        15s            L2      19            19     120.4       0.1100
+        15s     L2-greedy      75            75       0.0       0.5167
+        25s            L1      11            11     123.7       0.0651
+        25s     L1-greedy      59            59       0.0       0.4185
+        25s            L2      11            11     130.2       0.0645
+        25s     L2-greedy      77            77       0.0       0.5462
+        40s            L1       7             7     135.5       0.0403
+        40s     L1-greedy      61            61       0.0       0.4258
+        40s            L2       7             7     139.6       0.0401
+        40s     L2-greedy      83            83       0.0       0.5794
+
+
+[exited with code 0]

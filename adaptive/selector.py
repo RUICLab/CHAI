@@ -399,7 +399,7 @@ class Server:
 def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
              bin_s=1.0, context_bins=64, reactive=False, server=None,
              comms_energy=0.0, hindsight=False, state_aware_defer=False,
-             voltage_policy=None, rate_policy=None):
+             voltage_policy=None, rate_policy=None, greedy=False):
     """Run the selector over a trace and report what the device achieved."""
     dt = params.timestep
     steps_per_period_pre = int(deadline_s / dt)
@@ -548,7 +548,12 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         # free: at 200 uJ with 34 deferrals the device was charged 0.40 mJ
         # instead of ~7.2 mJ, so deferral looked far cheaper than it is.
         owes_comms = comms_energy > 0.0 and comms_paid < comms_energy
-        idle = (done_this_period or current == DEFER) and not owes_comms
+        # `greedy` keeps the device working after the period's first result.
+        # The default stops at one result per deadline, which idles the MCU for
+        # the rest of the period and spills the surplus: at a 40 s deadline on
+        # solar about 17.6 mJ arrives while one sobel-L1 task costs 3.11 mJ.
+        stop_after_first = done_this_period and not greedy
+        idle = (stop_after_first or current == DEFER) and not owes_comms
         before_load = state.energy_to_load
         on, i_mcu, _i_in = state.step(
             avail[k], k,
@@ -576,7 +581,7 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
             if comms_paid < comms_energy:             # radio round trip first
                 comms_paid += step_energy
                 step_energy = 0.0
-        if on and not idle and current != DEFER and not done_this_period:
+        if on and not idle and current != DEFER and not stop_after_first:
             task_energy += step_energy
             if task_energy >= levels[current].energy:
                 completed += 1
@@ -587,7 +592,8 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
 
 
     periods = max(1, n_steps // steps_per_period)
-    assert completed <= periods, f"{completed} completions in {periods} periods"
+    if not greedy:
+        assert completed <= periods, f"{completed} completions in {periods} periods"
     return {
         "completed": completed,
         "periods": periods,
