@@ -211,7 +211,7 @@ def forecast_oracle(history, future, bins_ahead):
 
 
 def hindsight_level(levels, state, avail, k_start, n_period, params,
-                    keep_alive, comms_energy):
+                    keep_alive, comms_energy, defer_if_none=False):
     """The best level this period could have run, judged after the fact.
 
     Replays the coming period through a copy of the CURRENT capacitor state --
@@ -239,7 +239,8 @@ def hindsight_level(levels, state, avail, k_start, n_period, params,
     for i, level in enumerate(levels):          # most exact first
         if level.energy <= delivered:
             return i
-    return len(levels) - 1
+    # Nothing fits. Either ship the cheapest anyway, or drop the task.
+    return DEFER if defer_if_none else len(levels) - 1
 
 
 def forecast_persistence(history, future, bins_ahead):
@@ -399,7 +400,8 @@ class Server:
 def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
              bin_s=1.0, context_bins=64, reactive=False, server=None,
              comms_energy=0.0, hindsight=False, state_aware_defer=False,
-             voltage_policy=None, rate_policy=None, greedy=False):
+             voltage_policy=None, rate_policy=None, greedy=False,
+             hindsight_defer=False):
     """Run the selector over a trace and report what the device achieved."""
     dt = params.timestep
     steps_per_period_pre = int(deadline_s / dt)
@@ -461,7 +463,8 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
             if hindsight:
                 current = hindsight_level(levels, state, avail, k,
                                           steps_per_period, params, keep_alive,
-                                          comms_energy)
+                                          comms_energy,
+                                          defer_if_none=hindsight_defer)
             elif reactive and server is None and k > 0:
                 # Start from the last period's outcome, not from a fixed level.
                 # Mid-task correction no longer exists, so this boundary
@@ -600,6 +603,7 @@ def simulate(trace, levels, params, duration_s, deadline_s, choose, forecast,
         "missed": missed,
         "completion_rate": completed / periods,
         "mean_error": float(np.mean(errors)) if errors else float("nan"),
+        "errors": list(errors),   # per-task, for p95 and quality-adjusted scoring
         "energy_harvested_mJ": state.energy_harvested * 1e3,
         "energy_spilled_mJ": state.energy_spilled * 1e3,
         "tasks_per_mJ": (completed / (state.energy_harvested * 1e3)
