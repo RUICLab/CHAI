@@ -237,8 +237,18 @@ def report_efficiency(cells, levels_by_bench, bound):
 
 
 def main():
-    paths = sys.argv[1:] or ["reports/adaptive/results_sobel.json",
-                             "reports/adaptive/results_fft.json"]
+    # The error bound is the single most consequential knob in this analysis and
+    # it must be passed explicitly. A hardcoded 0.05 silently drove the headline:
+    # at 0.05 one level dominates almost everywhere and adaptation has nothing to
+    # decide, while at the project's own CHAI_ERROR_BOUND (0.30) the best fixed
+    # level varies by scenario and deadline and real forecasters win some cells.
+    args = [a for a in sys.argv[1:] if not a.startswith("--bound")]
+    bound = next((float(a.split("=", 1)[1]) for a in sys.argv[1:]
+                  if a.startswith("--bound=")), None)
+    if bound is None:
+        from config.config import ERROR_BOUND as bound
+    paths = args or ["reports/adaptive/results_sobel.json",
+                     "reports/adaptive/results_fft.json"]
     rows, levels = load(paths)
     cells = group(rows)
 
@@ -309,7 +319,7 @@ def main():
 
     wins = [(k, v) for k, v in headroom.items() if v[3] > TOL or v[4] > TOL]
     print(f"\n  cells with any headroom at all: {len(wins)}/{len(headroom)}")
-    report_efficiency(cells, levels, 0.05)
+    report_efficiency(cells, levels, bound)
 
     reactive_wins = sum(1 for k in headroom
                         if REACTIVE in cells[k]
