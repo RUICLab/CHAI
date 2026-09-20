@@ -119,7 +119,15 @@ def policy_affordable(safety=1.0):
 # Returned by a policy that declines to start a task at all this period.
 DEFER = -1
 
-ERROR_BOUND = 0.05
+# THE application error bound. This module hardcoded 0.05 while
+# config/config.py declared 0.30 and the two never agreed, which is why the same
+# campaign supported opposite conclusions depending on which file a study read.
+# 0.30 is the deployment requirement and admits L0/L1/L2. 0.05 admits only
+# L0/L1 and is a SENSITIVITY setting -- pass it explicitly, never assume it.
+#
+# Not imported from config.config: that module pulls in a dependency chain that
+# breaks test collection here. Kept in sync by tests/test_error_bound.py instead.
+ERROR_BOUND = 0.30
 
 
 def cheapest_within_bound(levels, bound=ERROR_BOUND):
