@@ -135,6 +135,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.venv-biomedical/
 env/
 venv/
 ENV/
@@ -195,3 +196,7 @@ approximated_functions/
 target/
 logs/
 results_archive/
+
+# Biomedical benchmark datasets and downloaded checkpoints are reproducible
+# external artifacts and are intentionally kept out of version control.
+data/biomedical/
