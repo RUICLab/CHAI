@@ -166,6 +166,7 @@ def train_cnn(
     validation_labels: np.ndarray,
     seed: int,
     epochs: int,
+    pos_weight: float = 1.0,
 ) -> tuple[TinyCough, list[dict], str]:
     # Was hardcoded to "mps" or "cpu" and never checked CUDA at all, so on a
     # CUDA machine this silently fell back to CPU. choose_device() (already
@@ -174,6 +175,11 @@ def train_cnn(
     model = TinyCough().to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-4)
     data = DataLoader(TensorDataset(train_features, train_labels), batch_size=64, shuffle=True)
+    # pos_weight upweights the minority (covid-19) class in the loss so training
+    # on an imbalanced train set (more negatives than positives, see
+    # select_records's negative_multiplier) doesn't just collapse to predicting
+    # the majority class. 1.0 recovers plain BCE for a balanced train set.
+    pos_weight_tensor = torch.tensor(pos_weight, device=device)
     history = []
     best_auc = -1.0
     best_state = None
@@ -184,7 +190,9 @@ def train_cnn(
             features, labels = features.to(device), labels.to(device)
             optimizer.zero_grad(set_to_none=True)
             logits = model(features)
-            loss = torch.nn.functional.binary_cross_entropy_with_logits(logits, labels)
+            loss = torch.nn.functional.binary_cross_entropy_with_logits(
+                logits, labels, pos_weight=pos_weight_tensor
+            )
             loss.backward()
             optimizer.step()
             loss_sum += float(loss.detach()) * len(features)
@@ -211,10 +219,29 @@ def predict_cnn(model: TinyCough, features: torch.Tensor, device: str) -> np.nda
     return np.asarray(probabilities)
 
 
-def select_records(frame: pd.DataFrame, root: Path, seed: int, max_per_class: int) -> pd.DataFrame:
+def select_records(
+    frame: pd.DataFrame,
+    root: Path,
+    seed: int,
+    max_per_class: int,
+    negative_statuses: tuple[str, ...] = ("healthy", "symptomatic"),
+    negative_multiplier: float = 1.0,
+) -> pd.DataFrame:
+    """`negative_statuses` controls what counts as the non-COVID class.
+
+    Filtered COUGHVID has 547 covid-19, 1135 symptomatic, 5628 healthy records
+    (2026-09-28 count). The default merges symptomatic into the negative class,
+    which is the clinically relevant screening framing (catch COVID among
+    people presenting with ANY respiratory symptom, not just among the fully
+    well) but also the harder one: a symptomatic-but-not-COVID cough may sound
+    closer to a COVID cough than a healthy one does. Pass
+    negative_statuses=("healthy",) to isolate covid-19-vs-healthy-only and
+    check how much of the near-chance result is that harder boundary rather
+    than the model or the amount of data.
+    """
     frame = frame.copy()
     frame["status"] = frame["status"].astype(str).str.strip().str.lower()
-    frame = frame[frame["status"].isin(("covid-19", "healthy", "symptomatic"))]
+    frame = frame[frame["status"].isin(("covid-19",) + negative_statuses)]
     if "cough_detected" in frame:
         frame = frame[pd.to_numeric(frame["cough_detected"], errors="coerce").fillna(0) >= 0.8]
     frame["label"] = (frame["status"] == "covid-19").astype(int)
@@ -224,10 +251,37 @@ def select_records(frame: pd.DataFrame, root: Path, seed: int, max_per_class: in
     counts = frame["label"].value_counts()
     if len(counts) != 2 or counts.min() < 30:
         raise ValueError(f"not enough labeled audio after filtering: {counts.to_dict()}")
-    per_class = min(max_per_class, int(counts.min()))
+    positive_available = int(counts.get(1, 0))
+    negative_available = int(counts.get(0, 0))
+    # covid-19 is the scarce class here (547 of 7310 after filtering, 2026-09-28
+    # count) and cannot be grown; negative_multiplier controls how much of the
+    # much larger healthy/symptomatic pool is used instead of undersampling it
+    # to match. Undersampling to 1:1 was discarding ~6200 of 6763 real negative
+    # examples. The loss must then be class-weighted (see train_cnn) or the
+    # model just learns to predict the majority class.
+    positive_n = min(max_per_class, positive_available)
+    negative_n = min(negative_available, max(positive_n, round(positive_n * negative_multiplier)))
+    if negative_n == positive_n:
+        # Byte-for-byte the ORIGINAL expression, kept verbatim rather than
+        # reimplemented. Two different attempts to reproduce
+        # groupby(...).sample(random_state=seed)'s exact row selection via two
+        # separate .sample() calls both silently drew a different sample than
+        # this (0.48/0.52 and then 0.525/0.532 balanced_accuracy/auroc against
+        # the committed 0.575/0.589 baseline for seed 2026) -- pandas' internal
+        # per-group RNG consumption isn't something to reverse-engineer by
+        # guessing. Only the negative_multiplier != 1.0 path below is new
+        # behaviour, and it has no prior baseline to match.
+        return (
+            frame.groupby("label", group_keys=False)
+            .sample(n=positive_n, random_state=seed)
+            .sample(frac=1.0, random_state=seed)
+            .reset_index(drop=True)
+        )
+    rng = np.random.RandomState(seed)
+    negative_rows = frame[frame["label"] == 0].sample(n=negative_n, random_state=rng)
+    positive_rows = frame[frame["label"] == 1].sample(n=positive_n, random_state=rng)
     return (
-        frame.groupby("label", group_keys=False)
-        .sample(n=per_class, random_state=seed)
+        pd.concat([positive_rows, negative_rows])
         .sample(frac=1.0, random_state=seed)
         .reset_index(drop=True)
     )
@@ -240,12 +294,37 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("reports/biomedical/coughvid_pilot.json"))
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--max-per-class", type=int, default=500)
+    parser.add_argument(
+        "--negative-statuses",
+        default="healthy,symptomatic",
+        help="comma-separated COUGHVID status values treated as the non-COVID "
+             "class; e.g. 'healthy' alone isolates the cleaner covid-vs-healthy "
+             "boundary from the harder covid-vs-symptomatic one",
+    )
+    parser.add_argument(
+        "--negative-multiplier",
+        type=float,
+        default=1.0,
+        help="negative:positive ratio in the sampled set, up to availability. "
+             "1.0 reproduces the original 1:1 undersampled balance; higher "
+             "values use more of the real negative pool (5628+1135 available "
+             "after filtering) instead of discarding it, with the loss "
+             "class-weighted in train_cnn to compensate.",
+    )
     parser.add_argument("--epochs", type=int, default=30)
     args = parser.parse_args()
 
     seed_everything(args.seed)
     extract_archive(args.archive, args.data)
-    records = select_records(load_metadata(args.data), args.data, args.seed, args.max_per_class)
+    negative_statuses = tuple(s.strip() for s in args.negative_statuses.split(",") if s.strip())
+    records = select_records(
+        load_metadata(args.data),
+        args.data,
+        args.seed,
+        args.max_per_class,
+        negative_statuses,
+        args.negative_multiplier,
+    )
     indices = np.arange(len(records))
     train_indices, test_indices = train_test_split(
         indices, test_size=0.2, random_state=args.seed, stratify=records["label"]
@@ -287,13 +366,21 @@ def main() -> None:
     feature_mean = exact_features[train_indices].mean()
     feature_std = exact_features[train_indices].std().clamp_min(1e-6)
     exact_features = ((exact_features - feature_mean) / feature_std).unsqueeze(1)
+    train_labels = labels[train_indices]
+    train_positive = int(train_labels.sum())
+    train_negative = int(len(train_labels) - train_positive)
+    # Weight so the minority class's contribution to the loss matches what it
+    # would be under 1:1 balance, regardless of how skewed negative_multiplier
+    # made the actual train split.
+    pos_weight = train_negative / max(train_positive, 1)
     model, history, device = train_cnn(
         exact_features[train_indices],
-        torch.from_numpy(labels[train_indices]).float(),
+        torch.from_numpy(train_labels).float(),
         exact_features[validation_indices],
         labels[validation_indices],
         args.seed,
         args.epochs,
+        pos_weight,
     )
     validation_probabilities = predict_cnn(model, exact_features[validation_indices], device)
     validation_metrics = binary_metrics(labels[validation_indices], validation_probabilities)
@@ -337,7 +424,12 @@ def main() -> None:
         args.output,
         {
             "status": "pilot",
-            "task": "COUGHVID self-reported COVID-19 vs healthy/symptomatic cough",
+            "task": "COUGHVID self-reported COVID-19 vs " + "/".join(negative_statuses) + " cough",
+            "negative_statuses": list(negative_statuses),
+            "negative_multiplier": args.negative_multiplier,
+            "train_positive_examples": train_positive,
+            "train_negative_examples": train_negative,
+            "loss_pos_weight": pos_weight,
             "medical_use_warning": "research benchmark only; not a diagnostic model",
             "seed": args.seed,
             "device": device,
