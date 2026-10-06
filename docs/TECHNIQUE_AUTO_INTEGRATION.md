@@ -164,10 +164,10 @@ Prints a summary of every file created/modified.
 
 ## The Safety System: Anchor-Bounded Updates
 
-The framework **never** overwrites hand-written content. Every prompt file has anchor markers:
+The framework **never** overwrites user-maintained content. Every prompt file has anchor markers:
 
 ```
-...hand-written content stays untouched...
+...user-maintained content stays untouched...
 # === AUTO-GENERATED START ===
 ...only this region is replaced...
 # === AUTO-GENERATED END ===

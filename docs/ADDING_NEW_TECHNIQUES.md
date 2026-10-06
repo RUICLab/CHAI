@@ -33,7 +33,7 @@ python -m tools.add_technique \
 | D | pytest gate runs | `tests/test_technique_integration.py` |
 | E | Report printed | stdout |
 
-**Safety:** All prompt updates are **anchor-bounded** — the framework only writes between `# === AUTO-GENERATED START ===` / `# === AUTO-GENERATED END ===` markers. Hand-written content is never touched.
+**Safety:** All prompt updates are **anchor-bounded** — the framework only writes between `# === AUTO-GENERATED START ===` / `# === AUTO-GENERATED END ===` markers. User-maintained content is never touched.
 
 ---
 

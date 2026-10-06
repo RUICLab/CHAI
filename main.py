@@ -269,10 +269,10 @@ parser.add_argument(
     "--canonical_backends",
     choices=["off", "on"],
     default="off",
-    help="Whether deterministic hand-written operator backends may replace a "
+    help="Whether deterministic operator backends may replace a "
          "model-generated candidate (the fixed-point Sobel T2 backend and the "
          "T27 nibble-lookup backend). OFF for any comparison: a win produced by "
-         "a hand-written benchmark-specific implementation measures that "
+         "a benchmark-specific reference implementation measures that "
          "implementation, not the planner. Turn ON only to report the "
          "system-backend condition as a separate, separately-labelled arm.",
 )
@@ -1504,7 +1504,7 @@ if not alreadyRun:
                 )
 
             # Canonical backends replace the model's candidate wholesale with a
-            # hand-written, benchmark-specific implementation. That is a
+            # deterministic, benchmark-specific implementation. That is a
             # legitimate system-level result but it is NOT evidence about the
             # planner, so it is off unless explicitly requested.
             if args.canonical_backends == "on":

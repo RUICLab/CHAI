@@ -84,7 +84,7 @@ def render_techniques_block(cards: List[Dict[str, Any]]) -> str:
     Render the block for ``prompts/approximation_techniques.txt``.
 
     Each card produces one numbered entry identical in style to the
-    hand-written T1–T30 entries.
+    static T1–T30 entries.
     """
     lines: List[str] = []
     for card in sorted(cards, key=lambda c: c["technique_id"]):

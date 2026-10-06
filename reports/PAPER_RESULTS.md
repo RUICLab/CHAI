@@ -8,7 +8,7 @@ during analysis, the withdrawal is noted rather than quietly dropped.
 (Fused SystemC, MSP430FR5994); nothing ran on hardware. Approximation error per
 level is measured on a **single 32×32 test image**, so error figures are point
 estimates for that input, not distributions over a representative input set.
-Approximation levels are hand-written canonical implementations, not planner
+Approximation levels are canonical reference implementations, not planner
 output — they bound what the transformation can do, not what CHAI's planner
 produces.
 
@@ -189,7 +189,7 @@ Recorded because each was reported before being corrected.
    0.280 against a 0.30 bound — 6.7% headroom on n = 1. State L2 results as
    *"measured 0.280 on our test input"*, not as satisfying the bound in general.
 2. **Simulation only.** No MSP430 was flashed; no radio packet was sent.
-3. **Hand-written levels.** The planner-to-dispatcher join is not demonstrated
+3. **Reference levels.** The planner-to-dispatcher join is not demonstrated
    end to end.
 4. **Trace length.** Measured RF recordings are 25–52 s and are looped to fill a
    run; only the 300 s solar recording supports unlooped analysis. Two scenarios

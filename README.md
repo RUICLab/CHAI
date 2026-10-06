@@ -308,7 +308,7 @@ Sets deterministic seeds (`set_deterministic_seeds(42)`) and writes a structured
 
 ```bash
 python3 tools/add_technique.py --request "Add 4-bit quantization for sensor data"
-# or supply a hand-written card:
+# or supply a local technique card:
 python3 tools/add_technique.py --card techniques/cards/T31_4bit_quantization.json
 ```
 

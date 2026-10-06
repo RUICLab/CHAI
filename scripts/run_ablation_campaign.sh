@@ -13,8 +13,8 @@
 #
 # Every arm is held to the identical frozen target list AND code summary,
 # objective, per-benchmark error bound, trace, capacitor, seed, and BO budget.
-# Canonical hand-written backends are OFF: a win produced by a benchmark-specific
-# hand-written implementation measures that implementation, not the planner.
+# Canonical reference backends are OFF: a win produced by a benchmark-specific
+# deterministic implementation measures that implementation, not the planner.
 
 set -euo pipefail
 

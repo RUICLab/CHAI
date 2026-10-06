@@ -220,7 +220,7 @@ def build(path="reports/adaptive/energy_adaptive_system.pdf"):
         "<b>1. Tight deadlines still favour a fixed level.</b> At 8 s, always running the "
         "cheapest level completes 85% against reactive's 64%. Adapting pays when there is "
         "slack to spend, not when there is none.<br/><br/>"
-        "<b>2. The level tables come from hand-written code.</b> They are an upper bound "
+        "<b>2. The level tables use canonical reference implementations.</b> They are an upper bound "
         "on what these transformations can deliver, not a result about automatically "
         "generated plans.<br/><br/>"
         "<b>3. Two benchmarks, and they are the two that work.</b> A classifier "

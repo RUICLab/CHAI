@@ -82,7 +82,7 @@ Two validity rules remain necessary:
   a written bound and candidates above it are rejected before optimization.
 * **A dominance gate rejects candidates worse than doing nothing.** The ratio
   was previously unbounded above 1, and selected plans ran at **1.89×** (AR,
-  CHAI) and **2.21×** (AR, Codex repair) the original program's power cycles
+  CHAI) and **2.21×** (AR, implementation-repair condition) the original program's power cycles
   while being reported as results. Disable only for a deliberate ablation, via
   `CHAI_REQUIRE_IMPROVEMENT=0`.
 
@@ -91,7 +91,7 @@ Two validity rules remain necessary:
 The generation prompt requires that every knob range contain a setting at which
 the function reproduces the original exactly. Nothing used to check it: the
 baseline gate only required `error ≤ 0.30`, so a plan whose declared reference
-point was already **18.27% wrong** (AR, Codex repair) was accepted and every
+point was already **18.27% wrong** (AR, implementation-repair condition) was accepted and every
 downstream number was measured against a broken reference.
 
 `runBayesOpt` now measures the identity point and discards the plan when the
@@ -210,7 +210,7 @@ calls. Verbatim planner responses and SHA-256 hashes are archived, and
   compile test, each with up to 5 retries.
 * State the number of independent planner repetitions and BO seeds separately;
   show the spread, not just the best run.
-* Report hand-written or Codex-implemented plans as implementation ablations /
+* Report externally implemented plans as implementation ablations /
   upper bounds, never as autonomous CHAI planner results.
 
 ## 12. Compute setup

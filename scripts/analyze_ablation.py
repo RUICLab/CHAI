@@ -23,7 +23,7 @@ Validity rules enforced here
 * A cell whose ``status.json`` reports a non-zero exit is invalid.
 * A cell missing a verified MSP430 target build is invalid when the run
   requested the strict gate.
-* A cell in which a canonical hand-written backend replaced generated code is
+* A cell in which a canonical deterministic backend replaced generated code is
   reported separately and excluded from planner comparisons.
 * Cells that produced no valid plan or no improvement are NOT dropped: they are
   counted in the validity rates, and effect sizes are computed on paired seeds
@@ -391,7 +391,7 @@ def main():
     if manifest.get("canonical_backends") == "on":
         report["warnings"].append(
             "Campaign ran with canonical_backends=on: results measure "
-            "hand-written benchmark-specific backends, not the planner."
+            "benchmark-specific reference backends, not the planner."
         )
     if manifest.get("target_build_gate") != "strict":
         report["warnings"].append(
@@ -495,7 +495,7 @@ def main():
             backend_cells = [c for c in cells if c["canonical_backend"]]
             if backend_cells:
                 print(f"      {len(backend_cells)} cell(s) used a canonical "
-                      "hand-written backend — excluded from planner effects")
+                      "reference backend — excluded from planner effects")
             if arm.startswith("chai"):
                 unverified = [
                     c for c in valid
