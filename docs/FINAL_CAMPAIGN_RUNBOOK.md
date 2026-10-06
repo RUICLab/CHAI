@@ -23,7 +23,7 @@
    `PLAN: none`, including the false claim that the function had no loops.
 2. Qwen 32B produced the correct T3 plan and immutability precondition, then
    failed to implement it in three generation attempts.
-3. Codex implemented that frozen plan exactly. Replay on MSP430 / RF_2 / 68 µF
+3. The implementation followed that frozen plan exactly. Replay on MSP430 / RF_2 / 68 µF
    produced error 0.0 and 8 versus 26 power cycles: a 69.23% reduction.
 4. After the exact-T3 sensitivity correction, Qwen 32B autonomously generated
    a valid `init_search` T3 implementation. An unchanged 20-call replay found
