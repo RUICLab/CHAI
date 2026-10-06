@@ -103,6 +103,50 @@ ERROR_METRIC_SPEC = {
         "bound": 0.30,
         "justification": "Matches the suite default for continuous outputs.",
     },
+    #: Both classifier benchmarks below score the FRACTION OF DECISIONS the
+    #: approximation changes, across every input in the reference, not a logit
+    #: deviation on one. The bound is therefore a decision-change rate: 0.05
+    #: permits one decision in twenty to flip.
+    #:
+    #: Two earlier bounds on this pair were wrong, and the reasons are worth
+    #: keeping because they were only caught by measuring real accuracy:
+    #:   0.20 on logit deviation  -- rejected configurations whose test AUROC
+    #:        was 0.911, because it policed harmless confidence drift.
+    #:   0.50 on logit deviation  -- passed a configuration whose test AUROC
+    #:        was 0.556, i.e. a model that had collapsed to predicting one
+    #:        class, because the single baked-in input happened to be of that
+    #:        class so its logit barely moved.
+    #: No threshold on a one-input deviation could have separated those cases;
+    #: the metric itself had to change.
+    "coughvid-iclib": {
+        "metric": "fraction of classification decisions that differ from the "
+                  "unapproximated kernel, over every reference input",
+        "bound": 0.05,
+        "justification": (
+            "One decision in twenty may change. This is a decision-change "
+            "rate, so the number is directly interpretable and a model that "
+            "collapses to a constant prediction scores near the class balance "
+            "(~0.5) instead of near zero, which is what the previous "
+            "single-input logit metric failed to catch. 0.05 is tight because "
+            "the decision is discrete with no graceful degradation, the same "
+            "reasoning stringsearch-iclib uses. Note this benchmark's labels "
+            "are DISTILLED from the dataset's published XGBoost cough "
+            "detector, so agreement here is agreement with that classifier, "
+            "not evidence of clinical correctness."
+        ),
+    },
+    "pcam-iclib": {
+        "metric": "fraction of classification decisions that differ from the "
+                  "unapproximated kernel, over every reference input",
+        "bound": 0.05,
+        "justification": (
+            "One decision in twenty may change. A flipped label is a wrong "
+            "diagnosis rather than a graceful degradation, so the metric "
+            "counts flips directly instead of scoring how far a logit moved; "
+            "a large logit shift that changes no decision is not damage, and "
+            "a small one that flips a decision is."
+        ),
+    },
 }
 
 
@@ -213,7 +257,8 @@ def generateGroundTruth(appName):
         "stringsearch", "stringsearch-iclib", "ar-iclib", "fft-iclib",
         "bc-iclib", "radix-bm", "segment-bm", "accept-activityrec",
     }
-    _TXT_APPS = {"fft", "lqi", "lqi-iclib", "link-estimator"}
+    _TXT_APPS = {"fft", "lqi", "lqi-iclib", "link-estimator", "pcam-iclib",
+                 "coughvid-iclib"}
 
     if appName in _IMAGE_APPS:
         artifact, intermediate = "out.pgm", "img.pgm"
@@ -706,6 +751,100 @@ def segmentbmError(pathToCodebase):
     return _normalized(error)
 
 
+def coughvidError(pathToCodebase):
+    """Error for coughvid-iclib: fraction of decisions the approximation changes.
+
+    See _decision_disagreement for why this is a disagreement rate over many
+    inputs rather than a logit deviation on one.
+    """
+    return _decision_disagreement("coughvid-iclib", pathToCodebase)
+
+
+def _decision_disagreement(app_name, pathToCodebase):
+    """Fraction of classification decisions the approximation changes.
+
+    Why this replaced a logit-deviation metric
+    ------------------------------------------
+    The previous metric scored the logit shift on the ONE input the benchmark
+    bakes in. Measured against the real test set, that signal turned out to be
+    uncorrelated with accuracy in both directions:
+
+      * it PASSED a configuration whose test AUROC was 0.556 -- the model had
+        collapsed to predicting a single class -- because the baked-in example
+        happened to be of that class, so its logit barely moved;
+      * it REJECTED configurations whose test AUROC was 0.911, because a large
+        but harmless logit shift on that one input looked catastrophic.
+
+    A deviation on one input cannot distinguish a uniform bias (fatal, because
+    the decision threshold is a fixed 0) from noise (harmless). Counting how
+    many decisions actually change can, and a collapse to a constant predictor
+    scores near the class balance rather than near zero.
+
+    The ground-truth file holds one reference logit per line. With several
+    lines this is the disagreement rate; with a single line it degrades to the
+    old behaviour, so benchmarks that still bake in one input keep working --
+    but note that a one-line reference gives a metric with only the values 0
+    and 1, which is why generating a multi-example reference is worth doing.
+    """
+    cwd = os.getcwd()
+    try:
+        os.chdir(pathToCodebase)
+        _build_checked(app_name)
+        _clear_stale("output.txt")
+        _run_main_to_file("output.txt")
+
+        with open("ground_truth.txt", "r") as file:
+            reference = [float(v) for v in file.read().split()]
+        with open("output.txt", "r") as file:
+            candidate = [float(v) for v in file.read().split()]
+
+        if not reference or not candidate:
+            raise RuntimeError(f"{app_name} produced no comparable logits")
+        if len(reference) != len(candidate):
+            raise RuntimeError(
+                f"{app_name} emitted {len(candidate)} logits but the reference "
+                f"has {len(reference)}; the candidate is not evaluating the "
+                "same inputs"
+            )
+
+        flips = sum(
+            (r >= 0.0) != (c >= 0.0) for r, c in zip(reference, candidate)
+        )
+        disagreement = flips / len(reference)
+
+        if flips == 0:
+            # Every decision matches. Report a small residual proportional to
+            # the confidence drift so the optimizer still has a gradient to
+            # follow among configurations that all classify identically,
+            # scaled to stay below one flip's worth of error.
+            drift = sum(
+                abs(r - c) / max(abs(r), 1.0) for r, c in zip(reference, candidate)
+            ) / len(reference)
+            residual = min(drift, 1.0) / (len(reference) + 1)
+            Dprint(
+                f"{app_name}: 0/{len(reference)} decisions changed, "
+                f"mean drift {drift:.4f}, error {residual:.6f}"
+            )
+            return _normalized(residual)
+
+        Dprint(
+            f"{app_name}: {flips}/{len(reference)} decisions changed, "
+            f"error {disagreement:.4f}"
+        )
+        return _normalized(disagreement)
+    finally:
+        os.chdir(cwd)
+
+
+def pcamError(pathToCodebase):
+    """Error for pcam-iclib: fraction of decisions the approximation changes.
+
+    See _decision_disagreement for why this is a disagreement rate over many
+    inputs rather than a logit deviation on one.
+    """
+    return _decision_disagreement("pcam-iclib", pathToCodebase)
+
+
 def bitcountError(pathToCodebase):
     def calculate_mape_from_csv(pred_file_path, gt_file_path):
         """
@@ -788,6 +927,8 @@ ERROR_EVALUATORS = {
     "bc-iclib": lambda p: bitcountError(p),
     "radix-bm": lambda p: radixbmError(p),
     "segment-bm": lambda p: segmentbmError(p),
+    "pcam-iclib": lambda p: pcamError(p),
+    "coughvid-iclib": lambda p: coughvidError(p),
 }
 
 
@@ -814,6 +955,8 @@ GROUND_TRUTH_ARTIFACTS = {
     "segment-bm": ["ground_truth.csv"],
     "lqi-iclib": ["ground_truth.txt"],
     "link-estimator": ["ground_truth.txt"],
+    "pcam-iclib": ["ground_truth.txt"],
+    "coughvid-iclib": ["ground_truth.txt"],
 }
 
 

@@ -181,6 +181,7 @@ from lib.plan_contract import (
     check_implementation_matches_plan,
     parse_plan,
     validate_plan_against_catalogue,
+    validate_plan_against_hardware,
 )
 from utils.optimization_metrics import (
     objective_description,
@@ -1145,6 +1146,9 @@ if not alreadyRun:
                 plan_errors = plan_errors + validate_plan_against_catalogue(
                     approved_plan, set(function_feasible)
                 )
+                plan_errors = plan_errors + validate_plan_against_hardware(
+                    approved_plan, hw_profile
+                )
                 plan_attempts = 0
                 while plan_errors and plan_attempts < MAX_PLAN_CONTRACT_RETRIES:
                     plan_attempts += 1
@@ -1191,6 +1195,9 @@ if not alreadyRun:
                     )
                     plan_errors = plan_errors + validate_plan_against_catalogue(
                         approved_plan, set(function_feasible)
+                    )
+                    plan_errors = plan_errors + validate_plan_against_hardware(
+                        approved_plan, hw_profile
                     )
 
                 exp_approved_plans[this_function] = approved_plan.as_dict()

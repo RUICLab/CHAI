@@ -3,6 +3,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# OS and editor-generated metadata
+.DS_Store
+~$*
+
+# Local presentation source retained outside the reproducible report pipeline
+/Ding Sep 18.pptx
+
 .vscode/
 
 # C extensions

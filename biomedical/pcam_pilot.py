@@ -79,23 +79,36 @@ class H5Pcam(Dataset):
         return image, label
 
 
-class TinyPcam(nn.Module):
-    """A 6.2K-parameter model small enough to make approximation interpretable."""
+#: Channel widths of the three stride-2 convolutions. The default reproduces
+#: the original 6.2K-parameter model. Narrower widths exist because the
+#: msp430fr5994 linker script leaves only ~13.7 KB of FRAM for weights after
+#: the managed-state runtime, and ~3.3 KB of RAM for activations -- the
+#: original does not fit either budget. See reports/biomedical/ for the
+#: measured accuracy of each width.
+DEFAULT_CHANNELS = (8, 16, 32)
 
-    def __init__(self):
+
+class TinyPcam(nn.Module):
+    """A small model whose width and input resolution are both configurable.
+
+    The global average pool makes the architecture resolution-agnostic, so the
+    same class serves every (resolution, channels) pair.
+    """
+
+    def __init__(self, channels: tuple[int, ...] = DEFAULT_CHANNELS):
         super().__init__()
-        self.features = nn.Sequential(
-            nn.Conv2d(3, 8, 3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(8),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(8, 16, 3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(16),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(16, 32, 3, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-        )
-        self.classifier = nn.Linear(32, 1)
+        self.channels = tuple(channels)
+        layers: list[nn.Module] = []
+        in_channels = 3
+        for out_channels in self.channels:
+            layers.append(
+                nn.Conv2d(in_channels, out_channels, 3, stride=2, padding=1, bias=False)
+            )
+            layers.append(nn.BatchNorm2d(out_channels))
+            layers.append(nn.ReLU(inplace=True))
+            in_channels = out_channels
+        self.features = nn.Sequential(*layers)
+        self.classifier = nn.Linear(self.channels[-1], 1)
 
     def forward(self, image: torch.Tensor) -> torch.Tensor:
         image = self.features(image)
@@ -133,17 +146,18 @@ def evaluate(
     return binary_metrics(labels, probabilities), probabilities, labels
 
 
-def estimate_macs(resolution: int) -> int:
+def estimate_macs(resolution: int, channels: tuple[int, ...] = DEFAULT_CHANNELS) -> int:
     size = resolution
     total = 0
-    channels = (3, 8, 16, 32)
-    for input_channels, output_channels in zip(channels[:-1], channels[1:]):
+    widths = (3,) + tuple(channels)
+    for input_channels, output_channels in zip(widths[:-1], widths[1:]):
         size = (size + 1) // 2
         total += size * size * input_channels * output_channels * 3 * 3
-    return total + 32
+    return total + channels[-1]
 
 
-def train_epoch(model: nn.Module, data: DataLoader, optimizer, device: torch.device) -> float:
+def train_epoch(model: nn.Module, data: DataLoader, optimizer, device: torch.device,
+                resolution: int = 64) -> float:
     model.train()
     total_loss = 0.0
     examples = 0
@@ -153,7 +167,7 @@ def train_epoch(model: nn.Module, data: DataLoader, optimizer, device: torch.dev
             images = images.flip(-1)
         if torch.rand(()) < 0.5:
             images = images.flip(-2)
-        images, targets = resize_batch(images.to(device), 64), targets.to(device)
+        images, targets = resize_batch(images.to(device), resolution), targets.to(device)
         optimizer.zero_grad(set_to_none=True)
         loss = F.binary_cross_entropy_with_logits(model(images), targets)
         loss.backward()
@@ -172,6 +186,18 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--max-train", type=int, default=24576)
     parser.add_argument("--max-test", type=int, default=32768)
+    parser.add_argument(
+        "--image-size", type=int, default=64,
+        help="resolution the model is TRAINED at. The default 64 reproduces "
+             "the original pilot. Smaller sizes exist because the activation "
+             "buffers, not the weights, are what overflow the msp430fr5994's "
+             "4 KB RAM region: at 16 the peak live pair fits in ~2.3 KB.",
+    )
+    parser.add_argument(
+        "--channels", type=str, default=None,
+        help="comma-separated channel widths for the three stride-2 convs, "
+             "e.g. '6,12,16'. Default reproduces the original 8,16,32.",
+    )
     args = parser.parse_args()
 
     seed_everything(args.seed)
@@ -185,14 +211,23 @@ def main() -> None:
     if args.max_test < len(test):
         test = Subset(test, list(range(args.max_test)))
 
-    model = TinyPcam().to(device)
+    channels = (
+        tuple(int(part) for part in args.channels.split(","))
+        if args.channels else DEFAULT_CHANNELS
+    )
+    model = TinyPcam(channels).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-4)
     history = []
     best_state = None
     best_auc = -1.0
     for epoch in range(args.epochs):
-        loss = train_epoch(model, loader(train_set, args.batch_size, True), optimizer, device)
-        metrics, _, _ = evaluate(model, loader(validation_set, args.batch_size), device, 64)
+        loss = train_epoch(
+            model, loader(train_set, args.batch_size, True), optimizer, device,
+            args.image_size,
+        )
+        metrics, _, _ = evaluate(
+            model, loader(validation_set, args.batch_size), device, args.image_size
+        )
         history.append({"epoch": epoch + 1, "loss": loss, **metrics})
         print(f"epoch={epoch + 1} loss={loss:.4f} val_bal_acc={metrics['balanced_accuracy']:.4f} val_auc={metrics['auroc']:.4f}")
         if metrics["auroc"] > best_auc:
@@ -204,8 +239,11 @@ def main() -> None:
     validation_loader = loader(validation_set, args.batch_size)
     levels = []
     reference_predictions = None
-    reference_macs = estimate_macs(64)
-    for resolution in (64, 48, 32, 24, 16):
+    reference_macs = estimate_macs(args.image_size, channels)
+    sweep = [r for r in (64, 48, 32, 24, 16) if r <= args.image_size]
+    if args.image_size not in sweep:
+        sweep.insert(0, args.image_size)
+    for resolution in sweep:
         _, validation_probabilities, validation_labels = evaluate(
             model, validation_loader, device, resolution
         )
@@ -217,7 +255,7 @@ def main() -> None:
         predictions = np.asarray(probabilities) >= threshold
         if reference_predictions is None:
             reference_predictions = predictions
-        macs = estimate_macs(resolution)
+        macs = estimate_macs(resolution, channels)
         levels.append(
             {
                 "resolution": resolution,
@@ -240,7 +278,18 @@ def main() -> None:
 
     checkpoint = args.output.with_suffix(".pt")
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"state_dict": best_state, "seed": args.seed}, checkpoint)
+    torch.save(
+        {
+            "state_dict": best_state,
+            "seed": args.seed,
+            # The exporter rebuilds the module before loading the weights,
+            # so the architecture has to travel with them or a narrower
+            # model silently fails to load into the default widths.
+            "channels": list(channels),
+            "image_size": args.image_size,
+        },
+        checkpoint,
+    )
     write_json(
         args.output,
         {
@@ -256,6 +305,8 @@ def main() -> None:
             "history": history,
             "levels": levels,
             "checkpoint": str(checkpoint),
+            "channels": list(channels),
+            "image_size": args.image_size,
         },
     )
 

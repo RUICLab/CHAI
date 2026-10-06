@@ -432,13 +432,70 @@ def _strip_c_comments(code):
     return re.sub(r"/\*.*?\*/|//[^\n]*", "", code, flags=re.DOTALL)
 
 
+#: A whole declaration statement, capturing the entire declarator list so that
+#: `int a, b, c;` yields all three names. The previous single-name pattern
+#: could not match a comma-separated list at all, so every index declared that
+#: way -- the form the benchmark kernels actually use -- was invisible. Those
+#: names then looked like state the original writes without declaring, i.e.
+#: external state, and any candidate that declared them properly was rejected
+#: for "shadowing". The rejection was spurious and unescapable: the candidate's
+#: code was correct C.
+_DECLARATION_STATEMENT = re.compile(
+    r"(?m)^[ \t]*(?:(?:const|volatile|static|register|extern)[ \t]+)*"
+    r"(?:(?:unsigned|signed)[ \t]+)?(?:(?:long|short)[ \t]+)*"
+    r"(?:void|char|int|long|short|float|double|_Bool|bool|size_t"
+    r"|u?int\d+_t|[A-Za-z_]\w*_t|struct[ \t]+\w+)"
+    r"(?:[ \t]*\*+)?[ \t]+([^;{}()\n]+);"
+)
+
+#: One declarator out of such a list: optional pointer stars, the name, then
+#: any array bounds or initialiser, all of which are discarded.
+_DECLARATOR_NAME = re.compile(r"^[ \t]*\**[ \t]*([A-Za-z_]\w*)")
+
+#: Type and storage keywords never name a variable. Filtered because a caller
+#: can hand this function a parameter list rather than a declaration, and a
+#: keyword captured as a "declared name" would quietly widen the set of names
+#: treated as local.
+_NOT_A_NAME = frozenset({
+    "const", "volatile", "static", "register", "extern", "unsigned", "signed",
+    "long", "short", "void", "char", "int", "float", "double", "_Bool", "bool",
+    "size_t", "struct", "union", "enum",
+})
+
+
+def _declared_names(code):
+    """Return every identifier declared by a declaration statement in *code*.
+
+    Handles comma-separated declarator lists, pointer stars, array bounds and
+    initialisers. An initialiser may itself contain commas (a call argument
+    list, say), so declarators are split only on commas outside brackets.
+    """
+    names = set()
+    for statement in _DECLARATION_STATEMENT.findall(code):
+        depth = 0
+        current = []
+        declarators = []
+        for character in statement:
+            if character in "([{":
+                depth += 1
+            elif character in ")]}":
+                depth -= 1
+            if character == "," and depth == 0:
+                declarators.append("".join(current))
+                current = []
+            else:
+                current.append(character)
+        declarators.append("".join(current))
+
+        for declarator in declarators:
+            match = _DECLARATOR_NAME.match(declarator)
+            if match and match.group(1) not in _NOT_A_NAME:
+                names.add(match.group(1))
+    return names
+
+
 def _shadowed_written_state(original_function, approximate_function):
     """Find original non-local state that the candidate accidentally shadows."""
-    declaration = re.compile(
-        r"(?m)^\s*(?:(?:const|volatile|static|register|unsigned|signed|long|short)\s+)*"
-        r"[A-Za-z_]\w*(?:(?:\s*\*+\s*)|\s+)([A-Za-z_]\w*)\s*"
-        r"(?:\[[^;\n]*\]|=[^;\n]*|;)"
-    )
     assignment = re.compile(
         r"\b([A-Za-z_]\w*)\s*(?:\[[^\]\n]*\]\s*)?"
         r"(?:\+\+|--|[+\-*/%]?=(?!=))"
@@ -449,10 +506,10 @@ def _shadowed_written_state(original_function, approximate_function):
     )
     original = _strip_c_comments(original_function)
     approximate = _strip_c_comments(approximate_function)
-    original_locals = set(declaration.findall(original)) | set(
+    original_locals = _declared_names(original) | set(
         for_declaration.findall(original)
     )
-    approximate_locals = set(declaration.findall(approximate)) | set(
+    approximate_locals = _declared_names(approximate) | set(
         for_declaration.findall(approximate)
     )
     written_identifiers = set(assignment.findall(original))

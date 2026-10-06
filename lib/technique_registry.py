@@ -197,8 +197,15 @@ TECHNIQUE_REGISTRY: Dict[int, TechniqueEntry] = {
         compute_cost_relative=0.9,
         applicable_apps=[],
         description=(
-            "Trim neural connections. Not applicable: none of these "
-            "benchmarks contains a neural network."
+            "Trim neural connections. pcam-iclib and coughvid-iclib are both "
+            "CNNs, so this operator is relevant to them in principle. It is "
+            "still left unselected for a structural reason: pruning changes "
+            "tensor shapes and weight values and generally requires "
+            "retraining or fine-tuning, which makes it a model-level paired "
+            "transformation that must regenerate the exported C artifact. "
+            "This pipeline applies function-local rewrites to a fixed "
+            "artifact, so enabling pruning as a local operator would be "
+            "incorrect rather than merely inapplicable."
         ),
     ),
     18: TechniqueEntry(

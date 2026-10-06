@@ -484,6 +484,54 @@ def validate_plan_against_catalogue(plan, allowed_ids):
     ]
 
 
+def validate_plan_against_hardware(plan, hw_profile):
+    """Return errors for knobs the target hardware cannot carry.
+
+    Why this runs at PLAN time
+    --------------------------
+    A knob declared ``Real`` used to be accepted here and only rejected much
+    later, after code generation, and the path in between made the rejection
+    impossible to act on:
+
+      1. the plan declares the knob ``Real``;
+      2. the model writes it as an integer in C, which is correct for a target
+         with no FPU;
+      3. ``utils/validator.py`` rewrites that declaration to ``double`` so the
+         code matches the plan's declared type;
+      4. ``utils/operator_conformance.py`` then rejects the candidate because a
+         float knob on a no-FPU target costs software-emulated FP cycles;
+      5. the feedback tells the model to express the knob as an integer -- which
+         is what it had already done in step 2.
+
+    The model cannot escape that loop however capable it is, because the thing
+    being rejected is introduced by the repair rather than by the model. Every
+    observed ``conv_block`` attempt died here. Rejecting a ``Real`` knob while
+    the plan is still being validated makes the feedback actionable: the model
+    can change the plan, which is the thing that is actually wrong.
+    """
+    if plan.declined or hw_profile is None or getattr(hw_profile, "has_fpu", True):
+        return []
+
+    offenders = sorted(
+        {
+            knob["name"]
+            for record in plan.records
+            for knob in record.knobs
+            if knob.get("type") == "Real"
+        }
+    )
+    if not offenders:
+        return []
+    return [
+        "Knob(s) " + ", ".join(offenders) + " are declared Real, but "
+        f"{getattr(hw_profile, 'name', 'the target')} has no FPU, so every use "
+        "of a floating-point knob costs software-emulated FP cycles and the "
+        "candidate will be rejected after generation. Declare the knob Integer "
+        "in the plan -- for example a percentage in 0..100, a shift amount, or "
+        "a value scaled by a fixed power of ten -- and use integer arithmetic."
+    ]
+
+
 def check_implementation_matches_plan(plan, implemented_ids):
     """Return ``(error, corrected_ids, actions)`` for a generated candidate.
 

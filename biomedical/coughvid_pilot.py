@@ -382,6 +382,24 @@ def main() -> None:
         args.epochs,
         pos_weight,
     )
+    # Persist the trained weights. Without this the model existed only for the
+    # lifetime of the process, so every reported number was unreproducible and
+    # the model could not be exported to C at all. feature_mean/feature_std are
+    # saved alongside because they are derived from the training split, not
+    # constants: any consumer that re-normalises a spectrogram differently is
+    # feeding the network a different input than it was trained on.
+    checkpoint = args.output.with_suffix(".pt")
+    checkpoint.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "state_dict": model.state_dict(),
+            "seed": args.seed,
+            "feature_mean": float(feature_mean),
+            "feature_std": float(feature_std),
+        },
+        checkpoint,
+    )
+
     validation_probabilities = predict_cnn(model, exact_features[validation_indices], device)
     validation_metrics = binary_metrics(labels[validation_indices], validation_probabilities)
     levels = []
@@ -433,6 +451,9 @@ def main() -> None:
             "medical_use_warning": "research benchmark only; not a diagnostic model",
             "seed": args.seed,
             "device": device,
+            "checkpoint": str(checkpoint),
+            "feature_mean": float(feature_mean),
+            "feature_std": float(feature_std),
             "selected_examples": len(records),
             "positive_examples": int(labels.sum()),
             "negative_examples": int((labels == 0).sum()),
