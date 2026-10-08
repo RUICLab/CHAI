@@ -3,6 +3,13 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# OS and editor-generated metadata
+.DS_Store
+~$*
+
+# Local presentation source retained outside the reproducible report pipeline
+/Ding Sep 18.pptx
+
 .vscode/
 
 # C extensions
@@ -14,6 +21,7 @@ fusedBin/cycles.dump
 fusedBin/combinations
 fusedBin/config.yaml
 fusedBin/fused
+fusedBin/trace_input.csv
 
 # Distribution / packaging
 .Python
@@ -134,6 +142,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.venv-biomedical/
 env/
 venv/
 ENV/
@@ -177,4 +186,24 @@ logs/*.txt
 logs/*.json
 outputs/
 final_results/
+experiment_results/
 __pycache__/
+
+# ---------------------------------------------------------------------------
+# Transient run artifacts
+# ---------------------------------------------------------------------------
+# These directories are rebuilt from scratch by _prepare_fresh_run() on every
+# invocation. Committing them makes the provenance config_hash unstable and
+# lets one run's leftovers look like source.
+dependency_graphs/
+functions/
+compilation_testing/
+knob_tuning/
+approximated_functions/
+target/
+logs/
+results_archive/
+
+# Biomedical benchmark datasets and downloaded checkpoints are reproducible
+# external artifacts and are intentionally kept out of version control.
+data/biomedical/

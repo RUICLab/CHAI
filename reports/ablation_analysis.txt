@@ -1,0 +1,123 @@
+======================================================================================
+CELL VALIDITY AND OUTCOMES
+======================================================================================
+
+ar-iclib
+  arm                        cells  valid  config    objective (mean +/- 95% CI)
+  --------------------------------------------------------------------------------
+  A  T1-T20, control off         3      3       0                            n/a
+  B  T1-T30, control off         3      3       0                            n/a
+  C  T1-T30, control ON          3      3       0                            n/a
+  D  T1-T20, control ON          3      3       0                            n/a
+
+bc-iclib
+  arm                        cells  valid  config    objective (mean +/- 95% CI)
+  --------------------------------------------------------------------------------
+  A  T1-T20, control off         3      3       0                            n/a
+  B  T1-T30, control off         3      3       0                            n/a
+  C  T1-T30, control ON          3      3       0                            n/a
+  D  T1-T20, control ON          3      3       0                            n/a
+
+fft-iclib
+  arm                        cells  valid  config    objective (mean +/- 95% CI)
+  --------------------------------------------------------------------------------
+  A  T1-T20, control off         3      3       0                            n/a
+  B  T1-T30, control off         3      3       0                            n/a
+  C  T1-T30, control ON          3      3       0                            n/a
+  D  T1-T20, control ON          3      3       0                            n/a
+
+lqi-iclib
+  arm                        cells  valid  config    objective (mean +/- 95% CI)
+  --------------------------------------------------------------------------------
+  A  T1-T20, control off         3      3       0                            n/a
+  B  T1-T30, control off         3      3       0                            n/a
+  C  T1-T30, control ON          3      3       0                            n/a
+  D  T1-T20, control ON          3      3       0                            n/a
+
+sobel-iclib
+  arm                        cells  valid  config    objective (mean +/- 95% CI)
+  --------------------------------------------------------------------------------
+  A  T1-T20, control off         3      3       0                            n/a
+  B  T1-T30, control off         3      3       0                            n/a
+  C  T1-T30, control ON          3      3       0                            n/a
+  D  T1-T20, control ON          3      3       0                            n/a
+
+stringsearch-iclib
+  arm                        cells  valid  config    objective (mean +/- 95% CI)
+  --------------------------------------------------------------------------------
+  A  T1-T20, control off         3      3       0                            n/a
+  B  T1-T30, control off         3      3       0                            n/a
+  C  T1-T30, control ON          3      3       0                            n/a
+  D  T1-T20, control ON          3      3       0                            n/a
+
+============================================================================================
+OPERATOR PROVENANCE
+============================================================================================
+  Two different quantities. Do not add them.
+
+  rejected / unenforced attempts: violations seen during generation.
+    Counts every candidate attempt, including ones later retried or
+    replaced, so it is a process measure, not a claim about results.
+  false claims in FINAL plan: the accepted artifact re-validated with
+    the current checker. This is what actually ships in a results
+    table. It is a LOWER BOUND: a static checker cannot prove a
+    transformation is genuinely implemented.
+
+  benchmark      arm                         attempts  FINAL false  of funcs   funcs ok
+  ----------------------------------------------------------------------------------------
+  ar-iclib       A  T1-T20, control off       30 unenf          10       23 23/27      
+  ar-iclib       B  T1-T30, control off       20 unenf           9       19 19/27      
+  ar-iclib       C  T1-T30, control ON        19 rej             0       13 13/27      
+  ar-iclib       D  T1-T20, control ON        22 rej             0       12 12/27      
+  bc-iclib       A  T1-T20, control off        6 unenf           1        1 1/3       
+  bc-iclib       B  T1-T30, control off        6 unenf           0        0 0/3       
+  bc-iclib       C  T1-T30, control ON         9 rej             0        0 0/3       
+  bc-iclib       D  T1-T20, control ON         0 rej             0        0 0/3       
+  fft-iclib      A  T1-T20, control off        5 unenf           2        2 2/3       
+  fft-iclib      B  T1-T30, control off        8 unenf           1        1 1/3       
+  fft-iclib      C  T1-T30, control ON         9 rej             0        0 0/3       
+  fft-iclib      D  T1-T20, control ON         6 rej             0        0 0/3       
+  lqi-iclib      A  T1-T20, control off        1 unenf           0        0 0/3       
+  lqi-iclib      B  T1-T30, control off        0 unenf           0        0 0/3       
+  lqi-iclib      C  T1-T30, control ON         0 rej             0        0 0/3       
+  lqi-iclib      D  T1-T20, control ON         0 rej             0        0 0/3       
+  sobel-iclib    A  T1-T20, control off        9 unenf           0        0 0/3       
+  sobel-iclib    B  T1-T30, control off        0 unenf           0        0 0/3       
+  sobel-iclib    C  T1-T30, control ON         0 rej             0        0 0/3       
+  sobel-iclib    D  T1-T20, control ON         6 rej             0        0 0/3       
+  stringsearch-iclib A  T1-T20, control off        9 unenf           0        0 0/3       
+  stringsearch-iclib B  T1-T30, control off        1 unenf           0        0 0/3       
+  stringsearch-iclib C  T1-T30, control ON         0 rej             0        0 0/3       
+  stringsearch-iclib D  T1-T20, control ON         2 rej             0        0 0/3       
+
+  A false claim in an ENFORCED arm is a checker gap, not a design
+  choice: the control plane was supposed to catch it and did not.
+
+======================================================================================
+2x2 EFFECTS ON PAIRED SEEDS  (negative = improvement in the objective)
+======================================================================================
+
+  benchmark              n      operator main       control main      interaction
+  --------------------------------------------------------------------------------
+  ar-iclib               0   no seed produced a comparable objective in all four arms
+  bc-iclib               0   no seed produced a comparable objective in all four arms
+  fft-iclib              0   no seed produced a comparable objective in all four arms
+  lqi-iclib              0   no seed produced a comparable objective in all four arms
+  sobel-iclib            0   no seed produced a comparable objective in all four arms
+  stringsearch-iclib     0   no seed produced a comparable objective in all four arms
+  --------------------------------------------------------------------------------
+  pooled                 0                n/a                n/a              n/a
+
+======================================================================================
+INTERPRETATION
+======================================================================================
+  operator main effect : ((B-A) + (C-D)) / 2  — the ten added operators
+  control main effect  : ((D-A) + (C-B)) / 2  — the hardware-aware control plane
+  interaction          : (C-B) - (D-A)        — do the two compound?
+
+  Not enough paired data to state a conclusion.
+
+======================================================================================
+WARNINGS
+======================================================================================
+  - 21 uncommitted file(s) at run time; config_hash b566adc486cd60a3 pins what ran.

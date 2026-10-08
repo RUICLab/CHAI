@@ -8,7 +8,9 @@ from langchain_core.prompts import (
 # from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline
 
 import dotenv
+dotenv.load_dotenv()
 import os
+import re
 import json
 from colorama import Fore, Back, Style
 
@@ -22,6 +24,9 @@ from config.config import (
     API_NAME,
 )
 
+from utils import llm_accounting
+from utils.message_text import message_text
+from utils import token_budget
 from utils.utils import(
     getFunctionData,
     formatMessageForHistory,
@@ -36,9 +41,10 @@ from utils.utils import(
 from utils.compiler import(
     compileTest
 )
+from utils.knob_metadata import drop_fixed_knobs, normalize_knob_metadata
+from utils.ollama_config import verify_ollama_context
 
-#  Load the API key and model from the .env file
-dotenv.load_dotenv()
+#  Load the model selected in .env.
 model = os.getenv("LLM_MODEL")
 
 # Initialize the language model
@@ -48,7 +54,55 @@ if API_NAME == "OpenAI":
     llmLangChain = ChatOpenAI(api_key=api_key, temperature=0, model=model, max_tokens=2048, max_retries=5, timeout=120)
 elif API_NAME == "Anthropic":
     api_key = os.getenv("ANTHROPIC_API_KEY")
-    llmLangChain = ChatAnthropic(api_key=api_key,model=model, temperature=0, max_tokens=8192)
+    # Sonnet 5 and the Opus 4.6+ family reject sampling parameters
+    # (temperature / top_p / top_k) with a 400 -- they are removed on those
+    # models, not merely ignored. Passing temperature=0 as the older models
+    # allowed makes every request fail. Determinism has to come from repeated
+    # runs instead, which is already required: the local 7B is not reproducible
+    # at temperature 0 either.
+    _no_sampling = any(
+        marker in model
+        for marker in ("sonnet-5", "opus-5", "opus-4-8", "opus-4-7", "opus-4-6",
+                       "sonnet-4-6", "fable-5", "mythos-5")
+    )
+    _anthropic_kwargs = {
+        "api_key": api_key,
+        "model": model,
+        "max_tokens": int(os.getenv("ANTHROPIC_MAX_TOKENS", "8192")),
+    }
+    if not _no_sampling:
+        _anthropic_kwargs["temperature"] = 0
+    llmLangChain = ChatAnthropic(**_anthropic_kwargs)
+elif API_NAME == "Ollama":
+    # Ollama exposes an OpenAI-compatible chat-completions endpoint. When
+    # CHAI runs in Docker, use host.docker.internal to reach the host service.
+    api_key = os.getenv("OLLAMA_API_KEY", "ollama")
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+    timeout = float(os.getenv("OLLAMA_TIMEOUT", "600"))
+    max_tokens = int(os.getenv("OLLAMA_MAX_TOKENS", "2048"))
+    max_retries = int(os.getenv("OLLAMA_MAX_RETRIES", "0"))
+    minimum_context = int(os.getenv("OLLAMA_MIN_CONTEXT", "0"))
+    configured_context = verify_ollama_context(
+        base_url,
+        model,
+        minimum_context,
+        timeout=min(timeout, 10),
+        expected_prediction_limit=max_tokens,
+    )
+    llmLangChain = ChatOpenAI(
+        api_key=api_key,
+        base_url=base_url,
+        temperature=0,
+        model=model,
+        max_tokens=max_tokens,
+        max_retries=max_retries,
+        timeout=timeout,
+    )
+    print(
+        f"[Ollama] Using {model} at {base_url} "
+        f"(context={configured_context or 'unchecked'}, timeout={timeout:.0f}s, "
+        f"max_tokens={max_tokens}, retries={max_retries})"
+    )
 elif API_NAME == "HuggingFace":
     from langchain_huggingface import ChatHuggingFace, HuggingFacePipeline
     from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, pipeline
@@ -143,13 +197,15 @@ def purposeIdentificationFunction(
             human_prompt_purpose, no_context_human_prompt = get_human_prompt_purpose()
             log_conversation(human_prompt_purpose)
 
+            llm_accounting.record("purpose_identification")
             output_purpose = chain.invoke(input=human_prompt_purpose)
+            token_budget.record_provider_usage("purpose_identification", output_purpose)
 
             if PRINT_LLM_CONVO:
-                print(Fore.CYAN + str(output_purpose.content))
+                print(Fore.CYAN + str(message_text(output_purpose)))
                 print(Style.RESET_ALL)
 
-            function_purpose = output_purpose.content
+            function_purpose = message_text(output_purpose)
             break
         except Exception as error:
             purpose_retries += 1
@@ -216,7 +272,9 @@ def annotateFunction(
             log_conversation(no_context_human_prompt)
 
             # Send API call for Annotation
+            llm_accounting.record("annotation")
             output_annotation = chain.invoke(input=human_prompt_anno)
+            token_budget.record_provider_usage("annotation", output_annotation)
 
             if PRINT_LLM_CONVO:
                 print(Fore.YELLOW + str(output_annotation))
@@ -247,17 +305,19 @@ def annotateFunction(
 
 
 def planStepFunction(
-        this_function, 
-        this_context, 
+        this_function,
+        this_context,
         planningPrompt,
-        platform_architecure
+        platform_architecure,
+        max_operators=4,
+        prev_err="",
     ):
 
     global PRINT_LLM_CONVO
 
     chain = llmLangChain
 
-    this_error = ""
+    this_error = prev_err
 
     def get_human_prompt_planing(context):
         # Cache function data
@@ -266,6 +326,7 @@ def planStepFunction(
         common_prompt = {
             'function_name': this_function,
             'platform_architecture': platform_architecure,
+            'max_operators': max_operators,
             'add_error': this_error,
         }
 
@@ -293,21 +354,30 @@ def planStepFunction(
             log_conversation(no_context_human_prompt)
 
             # Send API call for Planning step
+            llm_accounting.record("planning")
             output_plan = chain.invoke(input=human_prompt)
+            token_budget.record_provider_usage("planning", output_plan)
 
             if PRINT_LLM_CONVO:
-                print(Fore.YELLOW + str(output_plan.content))
+                print(Fore.YELLOW + str(message_text(output_plan)))
                 print(Style.RESET_ALL)
 
             break
         except Exception as error:
             plan_retries += 1
             print(f"[planning] Retry {plan_retries}/{MAX_PLAN_RETRIES} for {this_function}: {error}")
-            import gc; gc.collect()
+            import gc
+            gc.collect()
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except ImportError:
+                pass
             if plan_retries >= MAX_PLAN_RETRIES:
                 print(Fore.RED + f"  [planning] {this_function} failed after {MAX_PLAN_RETRIES} attempts." + Style.RESET_ALL)
                 break
-            _plan_content = output_plan.content if hasattr(output_plan, 'content') else str(output_plan)
+            _plan_content = message_text(output_plan)
             if PRINT_LLM_CONVO:
                 print(Fore.RED + _plan_content)
                 print(Style.RESET_ALL)
@@ -318,7 +388,7 @@ def planStepFunction(
             ]
             this_error = f"There was a format error in your previous response. {error}. Make sure to follow the JSON format stated.\n\n"
 
-    _plan_content_final = output_plan.content if hasattr(output_plan, 'content') else str(output_plan)
+    _plan_content_final = message_text(output_plan)
     this_convo = [
         formatMessageForHistory(no_context_human_prompt, False),
         formatMessageForHistory(_plan_content_final, True)
@@ -363,10 +433,12 @@ def approximateFunction(
             human_prompt_approx, no_context_human_prompt = get_human_prompt_approx(context)
             log_conversation(human_prompt_approx)
 
+            llm_accounting.record("approximation")
             output_approximated = chain.invoke(input=human_prompt_approx)
+            token_budget.record_provider_usage("approximation", output_approximated)
 
             if PRINT_LLM_CONVO:
-                print(Fore.GREEN + str(output_approximated.content))
+                print(Fore.GREEN + str(message_text(output_approximated)))
                 print(Style.RESET_ALL)
 
             # Compilation error check handeling
@@ -385,14 +457,14 @@ def approximateFunction(
                 print(Style.RESET_ALL)
 
             # Guard: output_approximated may still be a plain string if OOM hit before any response
-            _approx_content = output_approximated.content if hasattr(output_approximated, 'content') else str(output_approximated)
+            _approx_content = message_text(output_approximated)
             last_error = [
                 formatMessageForHistory(no_context_human_prompt, False),
                 formatMessageForHistory(_approx_content, True)
             ]
             this_error = f"There was a format error in your previous response. {error}. Make sure to follow the JSON format stated.\n\n"
 
-    _approx_content_final = output_approximated.content if hasattr(output_approximated, 'content') else str(output_approximated)
+    _approx_content_final = message_text(output_approximated)
     this_convo = [
         formatMessageForHistory(no_context_human_prompt, False),
         formatMessageForHistory(_approx_content_final, True)
@@ -618,8 +690,10 @@ def convertJson(
             log_conversation(no_context_prompt)
 
             # Always get raw LLM response first (single call)
+            llm_accounting.record("json_conversion")
             raw_response = chain_raw.invoke(input=human_prompt_json)
-            raw_text = raw_response.content if hasattr(raw_response, 'content') else str(raw_response)
+            token_budget.record_provider_usage("json_conversion", raw_response)
+            raw_text = message_text(raw_response)
 
             # Try parsing with output_format_parser
             parsed = None
@@ -654,6 +728,17 @@ def convertJson(
                 "knobRanges": knobs_variables_ranges,
                 "knobStepSize": knobs_variables_step_size,
             }
+
+            fixed_knobs = drop_fixed_knobs(approximate_function, mutate=True)
+            if fixed_knobs:
+                print(
+                    f"[convertJson] Kept fixed local constant(s) but removed "
+                    f"non-tunable metadata for {this_function}: {fixed_knobs}"
+                )
+
+            # Reject symbolic, mismatched, or otherwise unusable BO metadata
+            # while the LLM is still in its JSON repair loop.
+            normalize_knob_metadata(approximate_function, mutate=True)
 
             break
 
@@ -728,6 +813,7 @@ def approximateFunctionOLD(
             human_prompt_approx = get_human_prompt_approx()
             log_conversation(context, human_prompt_approx)
 
+            llm_accounting.record("approximation_legacy")
             output_approximated = chain.invoke(input={
                 'output_format': "\n The output format should be in JSON \n" + output_format_instructions_apx,
                 'annotated_code': function_code_annotated,
@@ -794,6 +880,16 @@ def approximateFunctionOLD(
 
 rtl_chat_histroy = []
 
+
+def _strip_markdown_code_fence(text: str) -> str:
+    """Return code-only output when an otherwise valid response is fenced."""
+    lines = text.strip().splitlines()
+    if lines and lines[0].lstrip().startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip().startswith("```"):
+        lines = lines[:-1]
+    return "\n".join(lines).strip() + "\n"
+
 def generateExpandMakeFile(
         files,
         compiler_error=""
@@ -814,20 +910,42 @@ def generateExpandMakeFile(
     
     print("Sending PDG Makefile prompt...")
     chain = prompt | llmLangChain
+    llm_accounting.record("makefile_rtl")
     output = chain.invoke(input={'conversation':rtl_chat_histroy,'compiler_error':compiler_error,'files_list':files})
     print("Generated PDG Makefile")
 
 
     rtl_chat_histroy.append(formatMessageForHistory(prompt.format(files_list=files,compiler_error=compiler_error),False))
-    rtl_chat_histroy.append(formatMessageForHistory(output.content,True))
+    rtl_chat_histroy.append(formatMessageForHistory(message_text(output),True))
     
     print("\n\n\n ------ Prompt: ------ \n\n")
     print(prompt.format(files_list=files,compiler_error=compiler_error,conversation=rtl_chat_histroy))
     print("\n\n\n ------ LLM Responce: ------ \n\n")
-    print(output.content)
-    return output.content
+    print(message_text(output))
+    return _strip_markdown_code_fence(message_text(output))
 
-def findTargetFunctions(function_target_prompt):
+def _cached_target_function_fallback(app_name):
+    """Recover known target functions when a local model emits no valid map."""
+    if not app_name:
+        return {}
+    path = os.path.join(
+        "llm-prerun", app_name, "approximated_functions", "apx_all.json"
+    )
+    try:
+        with open(path, "r") as f:
+            entries = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+    targets = {}
+    for entry in entries if isinstance(entries, list) else []:
+        name = entry.get("functionName")
+        if name:
+            targets[name] = "approximate"
+    return targets
+
+
+def findTargetFunctions(function_target_prompt, fallback_app_name=None):
 
     global PRINT_LLM_CONVO
     global GLOBAL_CONTEXT
@@ -854,13 +972,30 @@ def findTargetFunctions(function_target_prompt):
     )
 
     # Step 3: Invoke LLM for target functions
-    output = invokeLLM(formatted_prompt, llmLangChain)
+    output = invokeLLM(formatted_prompt, llmLangChain, stage="target_selection")
     if PRINT_LLM_CONVO:
         print("--- Target_function: ---\n \n")
         print(output)   
 
     # Step 4: Parse the target functions from the LLM's output
-    target_functions = parseTargetFunctions(output)
+    target_functions = parseTargetFunctions(output) if output else None
+    has_approximation = (
+        isinstance(target_functions, dict)
+        and any(str(choice).lower() == "approximate"
+                for choice in target_functions.values())
+    )
+    if not has_approximation:
+        fallback_targets = _cached_target_function_fallback(fallback_app_name)
+        if fallback_targets:
+            print(
+                "[target selection] Local-model response contained no usable "
+                f"approximation target; using cached targets for {fallback_app_name}: "
+                f"{sorted(fallback_targets)}"
+            )
+            target_functions = fallback_targets
+        else:
+            print("[target selection] No approximation target was selected.")
+            target_functions = {}
 
     # Step 5: Update context with the function target prompt and LLM's output
     context += formatMessageForHistory(function_target_prompt.format(code_base=code_base), False)
@@ -882,7 +1017,7 @@ def findTargetFunctions(function_target_prompt):
     )
 
     # Step 9: Invoke LLM to get a code summary
-    code_summary = invokeLLM(final_prompt, llmLangChain)
+    code_summary = invokeLLM(final_prompt, llmLangChain, stage="code_summary")
     if PRINT_LLM_CONVO:
         print("--- code_summary: ---\n \n")
         print(code_summary)
@@ -890,7 +1025,8 @@ def findTargetFunctions(function_target_prompt):
     # Step 10: Save 'code_summary' and 'target_functions' to 'logs/code_base_info.txt'
     data_to_save = {
         'code_summary': code_summary,
-        'target_functions': target_functions
+        'target_functions': target_functions,
+        'target_selection_raw': output,
     }
     with open(file_path, 'w') as file:
         json.dump(data_to_save, file)
@@ -899,23 +1035,27 @@ def findTargetFunctions(function_target_prompt):
     return target_functions, code_summary
 
 
-def invokeLLM(input, invoking_obj):
+def invokeLLM(input, invoking_obj, stage="uncategorized"):
 
     output = ""
     try:
+        llm_accounting.record(stage)
         output = invoking_obj.invoke(input=(input))
+        token_budget.record_provider_usage(stage, output)
     except Exception as error:
         print("While attempting to invoke LLM encoundered error: ",error)
         return None
     
-    return output.content
+    return message_text(output)
     
     
 def findApplicableTechniquesForFunction(
         this_function,
         this_context,
         feasible_techniques,
-        techniqueSelectionPrompt
+        techniqueSelectionPrompt,
+        max_operators=4,
+        ranked_fallback=None,
     ):
     """
     Ask the LLM which of the hardware-feasible techniques are plausible
@@ -959,9 +1099,10 @@ def findApplicableTechniquesForFunction(
             'function_name': this_function,
             'function_code': function_data,
             'feasible_techniques': feasible_list_text,
+            'max_operators': max_operators,
         }
         context_prompt = techniqueSelectionPrompt.format(context=this_context, **common_prompt)
-        no_context_prompt = techniqueSelectionPrompt.format(**common_prompt)
+        no_context_prompt = techniqueSelectionPrompt.format(context="", **common_prompt)
         return context_prompt, no_context_prompt
 
     def log_conversation(human_prompt):
@@ -977,10 +1118,12 @@ def findApplicableTechniquesForFunction(
             human_prompt_tech_select, no_context_human_prompt = get_human_prompt_tech_select()
             log_conversation(human_prompt_tech_select)
 
+            llm_accounting.record("operator_selection")
             output_tech_select = chain.invoke(input=human_prompt_tech_select)
+            token_budget.record_provider_usage("operator_selection", output_tech_select)
 
             if PRINT_LLM_CONVO:
-                print(Fore.CYAN + str(output_tech_select.content))
+                print(Fore.CYAN + str(message_text(output_tech_select)))
                 print(Style.RESET_ALL)
 
             break
@@ -995,23 +1138,96 @@ def findApplicableTechniquesForFunction(
                 print(Fore.RED + str(output_tech_select))
                 print(Style.RESET_ALL)
 
-    response_text = output_tech_select.content if hasattr(output_tech_select, 'content') else str(output_tech_select)
+    response_text = message_text(output_tech_select)
+
+    def this_tech_select_convo_from(text):
+        return [
+            formatMessageForHistory(no_context_human_prompt, False),
+            formatMessageForHistory(text, True),
+        ]
 
     candidate_ids = extract_technique_ids_from_text(response_text) if response_text else set()
     # Guard: LLM must only pick from what's actually hardware-feasible;
     # anything else it names gets dropped, not trusted.
     candidate_ids = candidate_ids & set(feasible_techniques.keys())
 
-    # Fail-open: if the LLM gave nothing usable, don't silently hand the
-    # rest of the pipeline an empty technique set — fall back to the full
-    # app-wide feasible set for this function instead.
-    if not candidate_ids:
-        print(Fore.YELLOW + f"  [techSelect] {this_function}: no valid candidates parsed — "
-              f"falling back to full feasible set ({len(feasible_techniques)})." + Style.RESET_ALL)
-        candidate_ids = set(feasible_techniques.keys())
+    declined = bool(response_text) and re.search(
+        r"SELECTED_OPERATORS\s*:\s*none", response_text, re.IGNORECASE
+    )
+    # Exact reuse is a call-site property that a small model can miss even
+    # when shown the source. Add T3 from a general structural detector when a
+    # caller invokes the function inside a loop whose induction variable does
+    # not affect the call arguments. This is only candidate selection; all
+    # normal plan, identity, build and behavioral gates remain in force.
+    from utils.context import enforce_callsite_operator_requirements
+    candidate_ids, structurally_removed, t3_evidence = (
+        enforce_callsite_operator_requirements(
+            candidate_ids, this_function, ENTITIES
+        )
+    )
+    if 3 not in feasible_techniques:
+        t3_evidence = []
+    if 3 in structurally_removed:
+        print(
+            Fore.YELLOW
+            + f"  [techSelect] {this_function}: removed T3 because no "
+              "stable-key repeated-call evidence exists at a source call site."
+            + Style.RESET_ALL
+        )
+    if t3_evidence:
+        candidate_ids.add(3)
+        print(
+            Fore.GREEN
+            + f"  [techSelect] {this_function}: structural call-site evidence "
+              f"adds T3 ({t3_evidence[0]})."
+            + Style.RESET_ALL
+        )
 
-    this_tech_select_convo = [
-        formatMessageForHistory(no_context_human_prompt, False),
-        formatMessageForHistory(response_text, True)
-    ]
-    return this_tech_select_convo, candidate_ids
+    if declined and not candidate_ids:
+        print(
+            Fore.CYAN
+            + f"  [techSelect] {this_function}: model reports no applicable operator."
+            + Style.RESET_ALL
+        )
+        return this_tech_select_convo_from(response_text), set()
+
+    # Bounded fallback. Falling back to the *complete* feasible set turned this
+    # narrowing step into a no-op, which is how unrelated operators reached
+    # every function's plan. Fall back to the cheapest ranked operators
+    # instead, so an unparseable answer still narrows the search space.
+    if not candidate_ids:
+        if ranked_fallback:
+            candidate_ids = {
+                tid for tid, *_ in ranked_fallback[:max_operators]
+            } & set(feasible_techniques.keys())
+        if not candidate_ids:
+            candidate_ids = set(sorted(feasible_techniques.keys())[:max_operators])
+        print(
+            Fore.YELLOW
+            + f"  [techSelect] {this_function}: no valid selection parsed — "
+              f"narrowing to {len(candidate_ids)} cheapest feasible operators "
+              f"{sorted(candidate_ids)} instead of the full set "
+              f"({len(feasible_techniques)})."
+            + Style.RESET_ALL
+        )
+
+    # Cap dimensionality even when the model over-selects.
+    if len(candidate_ids) > max_operators:
+        order = [tid for tid, *_ in (ranked_fallback or [])]
+        ordered = sorted(
+            candidate_ids,
+            key=lambda tid: (
+                0 if tid == 3 and t3_evidence else 1,
+                order.index(tid) if tid in order else len(order),
+            ),
+        )
+        dropped = set(ordered[max_operators:])
+        candidate_ids = set(ordered[:max_operators])
+        print(
+            Fore.YELLOW
+            + f"  [techSelect] {this_function}: capped selection at "
+              f"{max_operators} operators; dropped {sorted(dropped)}."
+            + Style.RESET_ALL
+        )
+
+    return this_tech_select_convo_from(response_text), candidate_ids

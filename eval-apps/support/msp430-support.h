@@ -18,7 +18,7 @@ void indicate_begin();
 // Indicate end of workload
 void indicate_end();
 
-// Hand-written fast version of memcpy
+// Optimized fast version of memcpy
 void fastmemcpy(uint8_t *dst, uint8_t *src, size_t len);
 
 // Delay between workload iterations

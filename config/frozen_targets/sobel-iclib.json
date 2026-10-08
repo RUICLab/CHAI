@@ -1,0 +1,10 @@
+{
+  "app": "sobel-iclib",
+  "selection_policy": "reachable source-defined computational functions; exclude main and I/O",
+  "target_functions": {
+    "sobel_filtering": "approximate",
+    "save_image_data": "do not approximate",
+    "main": "do not approximate"
+  },
+  "code_summary": "Sobel edge-filter benchmark. sobel_filtering performs two 3x3 convolution passes: the first obtains the output range and the second normalizes gradient values into image2. save_image_data is LOCAL_RUN-only file I/O and main is the frozen benchmark driver."
+}

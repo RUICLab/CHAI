@@ -55,7 +55,9 @@ WORKDIR /home/ubuntu/fused-checkmate
 RUN mkdir build && cd build
 
 WORKDIR /home/ubuntu/fused-checkmate/build
-RUN cmake .. -GNinja -DINSTALL_DEPENDENCIES=ON -DINSTALL_TARGET_TOOLCHAINS=ON -DEP_INSTALL_DIR=/home/ubuntu/.local && ninja
+RUN mkdir -p /home/ubuntu/.local && \
+    cmake .. -GNinja -DINSTALL_DEPENDENCIES=ON -DINSTALL_TARGET_TOOLCHAINS=ON -DEP_INSTALL_DIR=/home/ubuntu/.local && \
+    ninja
 
 # Set environment variables for toolchains
 ENV TOOLCHAIN_DIR=/home/ubuntu/.local

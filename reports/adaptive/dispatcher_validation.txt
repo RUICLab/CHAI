@@ -1,0 +1,99 @@
+Functional validation of the runtime level dispatcher.
+
+    PYTHONPATH=. python3 -m adaptive.dispatcher_validation
+
+This does NOT ask whether energy-aware dispatch beats a fixed configuration.
+That is a different question and it is answered elsewhere. This asks whether the
+dispatcher WORKS:
+
+  1. plenty of stored energy    -> the exact level fires
+  2. moderate                   -> a mid level fires
+  3. little                     -> an aggressive level fires
+  4. not enough for anything    -> DEFER
+  5. SAFETY: the level chosen never requires more energy than is available,
+     including the margin -- checked on every single decision
+  6. the chosen knobs are the ones that execute, and the recorded error is the
+     one the table promised for those knobs
+
+Part A drives the dispatcher at controlled voltages so every branch fires.
+Part B runs a synthetic high -> medium -> low -> none -> recovery profile and
+prints the timeline.
+Part C reports how often each level fires on the five measured RF recordings.
+================================================================================================
+
+TABLE UNDER TEST (sobel), capacitor 4700 uF, margin 10%
+  L0  needs  14.84 mJ   error 0.000
+  L1  needs   3.11 mJ   error 0.019
+  L2  needs   1.91 mJ   error 0.280
+
+PART A -- every branch fires, and the safety rule holds
+
+        V   available  selected   required   x margin   error   safe?
+    3.59V      18.04mJ        L0     14.84mJ     16.32mJ   0.000   OK
+    3.50V      16.54mJ        L0     14.84mJ     16.32mJ   0.000   OK
+    3.45V      15.72mJ        L1      3.11mJ      3.42mJ   0.019   OK
+    3.00V       8.90mJ        L1      3.11mJ      3.42mJ   0.019   OK
+    2.70V       4.88mJ        L1      3.11mJ      3.42mJ   0.019   OK
+    2.60V       3.64mJ        L1      3.11mJ      3.42mJ   0.019   OK
+    2.55V       3.03mJ        L2      1.91mJ      2.11mJ   0.280   OK
+    2.50V       2.44mJ        L2      1.91mJ      2.11mJ   0.280   OK
+    2.45V       1.86mJ     DEFER          -          -       -   n/a
+    2.40V       1.29mJ     DEFER          -          -       -   n/a
+    2.30V       0.18mJ     DEFER          -          -       -   n/a
+
+  branches exercised: ['DEFER', 'L0', 'L1', 'L2']
+  safety violations (chose a level it could not afford): 0
+
+
+PART B -- timeline over a controlled energy profile
+
+   period     phase  V at decision   available   fired   error
+        0      HIGH         0.000V       0.00mJ   DEFER       -
+        1      HIGH         1.835V       0.00mJ   DEFER       -
+        2      HIGH         3.590V      18.04mJ      L0   0.000
+        3      HIGH         3.590V      18.04mJ      L0   0.000
+        4    MEDIUM         3.590V      18.04mJ      L0   0.000
+        5    MEDIUM         3.224V      12.18mJ      L1   0.019
+        6    MEDIUM         3.590V      18.04mJ      L0   0.000
+        7    MEDIUM         3.224V      12.18mJ      L1   0.019
+        8       LOW         3.590V      18.04mJ      L0   0.000
+        9       LOW         2.920V       7.79mJ      L1   0.019
+       10       LOW         3.020V       9.19mJ      L1   0.019
+       11       LOW         3.129V      10.76mJ      L1   0.019
+       12      NONE         3.246V      12.51mJ      L1   0.019
+       13      NONE         2.955V       8.27mJ      L1   0.019
+       14      NONE         2.642V       4.15mJ      L1   0.019
+       15      NONE         2.298V       0.16mJ   DEFER       -
+       16   RECOVER         2.218V       0.00mJ   DEFER       -
+       17   RECOVER         3.590V      18.04mJ      L0   0.000
+       18   RECOVER         3.590V      18.04mJ      L0   0.000
+
+  level mix [7, 8, 0]   deferred 4   completed 15/19
+
+
+PART C -- sobel: how often each level fires on measured RF
+
+  trace        cap    L0    L1    L2  defer  completion  mean error
+  RF_1      1000uF     0    15     1      3         84%       0.035
+  RF_2      1000uF     0    17     0      2         89%       0.019
+  RF_6      1000uF     0    17     0      2         89%       0.019
+  RF_7      1000uF     0    16     1      2         89%       0.034
+  RF_9      1000uF     0    16     0      3         84%       0.019
+  Solar_I   1000uF     0    17     0      2         89%       0.019
+  RF_1      4700uF     2     7     0      8         47%       0.015
+  RF_2      4700uF     5     8     0      5         68%       0.012
+  RF_6      4700uF     3     8     0      7         58%       0.014
+  RF_7      4700uF     2     8     0      7         53%       0.015
+  RF_9      4700uF     1     7     0      8         42%       0.017
+  Solar_I   4700uF     4     8     0      5         63%       0.013
+
+================================================================================================
+VERDICT
+  safety violations across all controlled decisions: 0
+  distinct branches exercised: ['DEFER', 'L0', 'L1', 'L2']
+
+  RF rows loop a 25-52 s recording to fill 295 s; they show dispatch
+  behaviour, not evidence about RF predictability. Error per level is a
+  point estimate from one image and needs mean/P95 over an input set
+  before the table's quality column is trustworthy.
+DONE

@@ -1,0 +1,112 @@
+Phase B: does a slower forecaster change the CONTROLLER's behaviour?
+
+    PYTHONPATH=. python3 -m adaptive.forecast_policy_study
+
+Phase A (adaptive/forecast_study.py) showed slow-memory averaging cuts forecast
+error on held-out solar. Lower forecast error is not the deliverable. This asks
+the question that decides whether the controller changes:
+
+    false deferrals   declined a task that would in fact have finished
+    false runs        started a task that then missed its deadline, burning the
+                      period's harvest for nothing
+    per-offered       in-bound tasks per mJ the environment actually offered
+                      (harvested + spilled), so declining work is charged for
+                      the harvest it spills
+    completion        reported alongside, so nothing looks efficient by idling
+
+Run on the 300 s solar recording ONLY, for 295 s, so the trace is never looped.
+The RF recordings are 25-52 s and `simulate()` tiles them to fill a run; a
+long-window average would then be reading repeated copies of its own past. Phase
+A also showed RF supports 11 independent windows at 8 s and none at 40 s, so RF
+cannot settle this either way.
+========================================================================================================
+
+### sobel   (solar, 295s, not looped)
+
+  deadline 8s
+    forecaster                compl  defer  false_def  missed  spill mJ  per_offered
+    fixed-L1 (no forecast)      64%      0          0      12      21.4        0.152
+    persistence                 36%     18         10      22      87.4        0.078  [-48.5% vs fixed]
+    ewma a=0.3 (current)        39%     15          9      21      77.4        0.085  [-43.8% vs fixed]
+    ewma a=0.05                 53%      5          4      16      40.4        0.122  [-19.6% vs fixed]
+    ewma a=0.02                 56%      4          3      15      36.6        0.129  [-14.9% vs fixed]
+    mean 30s                    44%      8          7      19      51.9        0.101  [-33.4% vs fixed]
+    mean 60s                    58%      2          2      14      29.1        0.137  [ -9.7% vs fixed]
+
+  deadline 15s
+    forecaster                compl  defer  false_def  missed  spill mJ  per_offered
+    fixed-L1 (no forecast)     100%      0          0       0      81.0        0.116
+    persistence                 95%      1          1       1      84.8        0.109  [ -5.7% vs fixed]
+    ewma a=0.3 (current)        95%      1          1       1      84.8        0.109  [ -5.7% vs fixed]
+    ewma a=0.05                 95%      1          1       1      84.8        0.109  [ -5.7% vs fixed]
+    ewma a=0.02                 95%      1          1       1      84.8        0.109  [ -5.7% vs fixed]
+    mean 30s                    95%      1          1       1      84.8        0.109  [ -5.7% vs fixed]
+    mean 60s                    95%      1          1       1      84.8        0.109  [ -5.7% vs fixed]
+
+  deadline 25s
+    forecaster                compl  defer  false_def  missed  spill mJ  per_offered
+    fixed-L1 (no forecast)     100%      0          0       0     107.4        0.067
+    persistence                 91%      1          1       1     111.2        0.060  [ -9.5% vs fixed]
+    ewma a=0.3 (current)        91%      1          1       1     111.2        0.060  [ -9.5% vs fixed]
+    ewma a=0.05                 91%      1          1       1     111.2        0.060  [ -9.5% vs fixed]
+    ewma a=0.02                 91%      1          1       1     111.2        0.060  [ -9.5% vs fixed]
+    mean 30s                    91%      1          1       1     111.2        0.060  [ -9.5% vs fixed]
+    mean 60s                    91%      1          1       1     111.2        0.060  [ -9.5% vs fixed]
+
+  deadline 40s
+    forecaster                compl  defer  false_def  missed  spill mJ  per_offered
+    fixed-L1 (no forecast)     100%      0          0       0     125.1        0.041
+    persistence                 86%      1          1       1     129.0        0.035  [-14.7% vs fixed]
+    ewma a=0.3 (current)        86%      1          1       1     129.0        0.035  [-14.7% vs fixed]
+    ewma a=0.05                 86%      1          1       1     129.0        0.035  [-14.7% vs fixed]
+    ewma a=0.02                 86%      1          1       1     129.0        0.035  [-14.7% vs fixed]
+    mean 30s                    86%      1          1       1     129.0        0.035  [-14.7% vs fixed]
+    mean 60s                    86%      1          1       1     129.0        0.035  [-14.7% vs fixed]
+
+### fft   (solar, 295s, not looped)
+
+  deadline 8s
+    forecaster                compl  defer  false_def  missed  spill mJ  per_offered
+    fixed-L1 (no forecast)     100%      0          0       0      70.4        0.221
+    persistence                 94%      2          2       2      75.1        0.208  [ -6.1% vs fixed]
+    ewma a=0.3 (current)        97%      1          1       1      72.7        0.214  [ -3.1% vs fixed]
+    ewma a=0.05                 97%      1          1       1      72.7        0.214  [ -3.1% vs fixed]
+    ewma a=0.02                 97%      1          1       1      72.7        0.214  [ -3.1% vs fixed]
+    mean 30s                    97%      1          1       1      72.7        0.214  [ -3.1% vs fixed]
+    mean 60s                    97%      1          1       1      72.7        0.214  [ -3.1% vs fixed]
+
+  deadline 15s
+    forecaster                compl  defer  false_def  missed  spill mJ  per_offered
+    fixed-L1 (no forecast)     100%      0          0       0     109.2        0.112
+    persistence                 95%      1          1       1     111.5        0.105  [ -5.5% vs fixed]
+    ewma a=0.3 (current)        95%      1          1       1     111.5        0.105  [ -5.5% vs fixed]
+    ewma a=0.05                 95%      1          1       1     111.5        0.105  [ -5.5% vs fixed]
+    ewma a=0.02                 95%      1          1       1     111.5        0.105  [ -5.5% vs fixed]
+    mean 30s                    95%      1          1       1     111.5        0.105  [ -5.5% vs fixed]
+    mean 60s                    95%      1          1       1     111.5        0.105  [ -5.5% vs fixed]
+
+  deadline 25s
+    forecaster                compl  defer  false_def  missed  spill mJ  per_offered
+    fixed-L1 (no forecast)     100%      0          0       0     123.7        0.065
+    persistence                 91%      1          1       1     126.1        0.059  [ -9.4% vs fixed]
+    ewma a=0.3 (current)        91%      1          1       1     126.1        0.059  [ -9.4% vs fixed]
+    ewma a=0.05                 91%      1          1       1     126.1        0.059  [ -9.4% vs fixed]
+    ewma a=0.02                 91%      1          1       1     126.1        0.059  [ -9.4% vs fixed]
+    mean 30s                    91%      1          1       1     126.1        0.059  [ -9.4% vs fixed]
+    mean 60s                    91%      1          1       1     126.1        0.059  [ -9.4% vs fixed]
+
+  deadline 40s
+    forecaster                compl  defer  false_def  missed  spill mJ  per_offered
+    fixed-L1 (no forecast)     100%      0          0       0     135.5        0.040
+    persistence                 86%      1          1       1     137.8        0.034  [-14.5% vs fixed]
+    ewma a=0.3 (current)        86%      1          1       1     137.8        0.034  [-14.5% vs fixed]
+    ewma a=0.05                 86%      1          1       1     137.8        0.034  [-14.5% vs fixed]
+    ewma a=0.02                 86%      1          1       1     137.8        0.034  [-14.5% vs fixed]
+    mean 30s                    86%      1          1       1     137.8        0.034  [-14.5% vs fixed]
+    mean 60s                    86%      1          1       1     137.8        0.034  [-14.5% vs fixed]
+
+========================================================================================================
+Read per_offered against fixed-L1, not against the other forecasters:
+the question is whether ANY of them earns the deferral machinery, not
+which of them is least bad.
+DONE

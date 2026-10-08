@@ -1,0 +1,10 @@
+{
+  "app": "bc-iclib",
+  "selection_policy": "reachable source-defined computational functions; exclude main and unreachable code",
+  "target_functions": {
+    "btbl_bitcnt": "approximate",
+    "bit_count": "do not approximate",
+    "main": "do not approximate"
+  },
+  "code_summary": "Bit-count benchmark. btbl_bitcnt recursively consumes nonzero bytes and uses a 256-entry byte lookup table. bit_count is not called by the active benchmark source and main is the frozen benchmark driver."
+}

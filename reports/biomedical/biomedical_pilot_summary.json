@@ -1,0 +1,273 @@
+{
+  "coughvid": [
+    {
+      "auroc": {
+        "max": 0.6071,
+        "median": 0.5889,
+        "min": 0.5014000000000001
+      },
+      "balanced_accuracy": {
+        "max": 0.5800000000000001,
+        "median": 0.575,
+        "min": 0.535
+      },
+      "frame_reduction_vs_l0": 0.0,
+      "hop_multiplier": 1,
+      "prediction_disagreement_vs_l0": {
+        "max": 0.0,
+        "median": 0.0,
+        "min": 0.0
+      },
+      "sensitivity": {
+        "max": 0.51,
+        "median": 0.38,
+        "min": 0.3
+      },
+      "specificity": {
+        "max": 0.78,
+        "median": 0.77,
+        "min": 0.64
+      }
+    },
+    {
+      "auroc": {
+        "max": 0.5915,
+        "median": 0.5864,
+        "min": 0.4976
+      },
+      "balanced_accuracy": {
+        "max": 0.565,
+        "median": 0.565,
+        "min": 0.5
+      },
+      "frame_reduction_vs_l0": 0.49831649831649827,
+      "hop_multiplier": 2,
+      "prediction_disagreement_vs_l0": {
+        "max": 0.605,
+        "median": 0.325,
+        "min": 0.25
+      },
+      "sensitivity": {
+        "max": 0.86,
+        "median": 0.71,
+        "min": 0.52
+      },
+      "specificity": {
+        "max": 0.61,
+        "median": 0.42,
+        "min": 0.14
+      }
+    },
+    {
+      "auroc": {
+        "max": 0.5516000000000001,
+        "median": 0.5295,
+        "min": 0.5175
+      },
+      "balanced_accuracy": {
+        "max": 0.53,
+        "median": 0.515,
+        "min": 0.51
+      },
+      "frame_reduction_vs_l0": 0.7474747474747474,
+      "hop_multiplier": 4,
+      "prediction_disagreement_vs_l0": {
+        "max": 0.605,
+        "median": 0.405,
+        "min": 0.345
+      },
+      "sensitivity": {
+        "max": 0.88,
+        "median": 0.52,
+        "min": 0.49
+      },
+      "specificity": {
+        "max": 0.54,
+        "median": 0.53,
+        "min": 0.15
+      }
+    },
+    {
+      "auroc": {
+        "max": 0.5650999999999999,
+        "median": 0.5064,
+        "min": 0.48299999999999993
+      },
+      "balanced_accuracy": {
+        "max": 0.53,
+        "median": 0.53,
+        "min": 0.495
+      },
+      "frame_reduction_vs_l0": 0.8720538720538721,
+      "hop_multiplier": 8,
+      "prediction_disagreement_vs_l0": {
+        "max": 0.53,
+        "median": 0.5,
+        "min": 0.345
+      },
+      "sensitivity": {
+        "max": 0.66,
+        "median": 0.44,
+        "min": 0.38
+      },
+      "specificity": {
+        "max": 0.62,
+        "median": 0.61,
+        "min": 0.4
+      }
+    }
+  ],
+  "pcam": [
+    {
+      "auroc": {
+        "max": 0.8458897506765939,
+        "median": 0.8394779288560842,
+        "min": 0.8379921095878383
+      },
+      "balanced_accuracy": {
+        "max": 0.7653958313330849,
+        "median": 0.7555275038661349,
+        "min": 0.7391652286764093
+      },
+      "mac_reduction_vs_l0": 0.0,
+      "prediction_disagreement_vs_l0": {
+        "max": 0.0,
+        "median": 0.0,
+        "min": 0.0
+      },
+      "resolution": 64,
+      "sensitivity": {
+        "max": 0.7290101972278195,
+        "median": 0.6930451242596324,
+        "min": 0.6653233192892472
+      },
+      "specificity": {
+        "max": 0.8180098834726375,
+        "median": 0.8130071380635715,
+        "min": 0.8017814654383503
+      }
+    },
+    {
+      "auroc": {
+        "max": 0.8517536362108893,
+        "median": 0.838129077361244,
+        "min": 0.8362623396398672
+      },
+      "balanced_accuracy": {
+        "max": 0.7707512854293472,
+        "median": 0.7545222154691389,
+        "min": 0.7490549132365388
+      },
+      "mac_reduction_vs_l0": 0.43748273821266526,
+      "prediction_disagreement_vs_l0": {
+        "max": 0.09368896484375,
+        "median": 0.088958740234375,
+        "min": 0.081634521484375
+      },
+      "resolution": 48,
+      "sensitivity": {
+        "max": 0.7691884960615497,
+        "median": 0.7676619649508457,
+        "min": 0.7512975514440984
+      },
+      "specificity": {
+        "max": 0.7723140747971448,
+        "median": 0.7468122750289793,
+        "min": 0.7413824659874322
+      }
+    },
+    {
+      "auroc": {
+        "max": 0.8554176368395395,
+        "median": 0.8362212906585754,
+        "min": 0.8309738029454512
+      },
+      "balanced_accuracy": {
+        "max": 0.7676550973769269,
+        "median": 0.7549555841566012,
+        "min": 0.7380823461936227
+      },
+      "mac_reduction_vs_l0": 0.749970408364569,
+      "prediction_disagreement_vs_l0": {
+        "max": 0.122802734375,
+        "median": 0.09881591796875,
+        "min": 0.097625732421875
+      },
+      "resolution": 32,
+      "sensitivity": {
+        "max": 0.7335287293155035,
+        "median": 0.7109971301215119,
+        "min": 0.7011052085241497
+      },
+      "specificity": {
+        "max": 0.8017814654383503,
+        "median": 0.7989140381916906,
+        "min": 0.7750594838630956
+      }
+    },
+    {
+      "auroc": {
+        "max": 0.8416160726516976,
+        "median": 0.8197422126955107,
+        "min": 0.8148219191516713
+      },
+      "balanced_accuracy": {
+        "max": 0.7584381351749174,
+        "median": 0.7314910640681614,
+        "min": 0.7290954952153537
+      },
+      "mac_reduction_vs_l0": 0.8593410929177352,
+      "prediction_disagreement_vs_l0": {
+        "max": 0.17938232421875,
+        "median": 0.145721435546875,
+        "min": 0.1275634765625
+      },
+      "resolution": 24,
+      "sensitivity": {
+        "max": 0.722781950296147,
+        "median": 0.6577517249801551,
+        "min": 0.6242901630335226
+      },
+      "specificity": {
+        "max": 0.8386919651028003,
+        "median": 0.8004392654505521,
+        "min": 0.794094320053688
+      }
+    },
+    {
+      "auroc": {
+        "max": 0.8169105407916624,
+        "median": 0.8001784354774034,
+        "min": 0.791250550267387
+      },
+      "balanced_accuracy": {
+        "max": 0.7297560079322919,
+        "median": 0.7183066390343953,
+        "min": 0.7121645282807272
+      },
+      "mac_reduction_vs_l0": 0.9374630104557112,
+      "prediction_disagreement_vs_l0": {
+        "max": 0.217864990234375,
+        "median": 0.18603515625,
+        "min": 0.16802978515625
+      },
+      "resolution": 16,
+      "sensitivity": {
+        "max": 0.6805886303962875,
+        "median": 0.6329608597423215,
+        "min": 0.5841118641997924
+      },
+      "specificity": {
+        "max": 0.8402171923616619,
+        "median": 0.8265511561222623,
+        "min": 0.7560246476725032
+      }
+    }
+  ],
+  "scope": "host-side dataset pilot; no Fused power-cycle measurements",
+  "seeds": [
+    2026,
+    2027,
+    2028
+  ]
+}

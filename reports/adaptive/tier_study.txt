@@ -1,0 +1,218 @@
+### sobel    L0 err 0.000 @ 14.84 mJ   L1 err 0.019 @ 3.11 mJ   L2 err 0.280 @ 1.91 mJ
+################################################################################################################
+
+  trace solar   [unlooped]
+
+    deadline 8s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                   0%       nan      nan      0.0     0.000   0.000      0   [0, 0, 0]
+      fixed-L1                  64%     0.019    0.019     22.6     0.627   0.149      0   [0, 23, 0]
+      fixed-L2                 100%     0.280    0.280     25.9     0.720   0.159      0   [0, 0, 36]
+      ORACLE tier              100%     0.099    0.280     32.4     0.901   0.210      0   [0, 25, 11]  <-- best quality
+      ORACLE tier + defer      100%     0.099    0.280     32.4     0.901   0.210      0   [0, 25, 11]  <-- best quality
+
+    deadline 15s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                   0%       nan      nan      0.0     0.000   0.000      0   [0, 0, 0]
+      fixed-L1                 100%     0.019    0.019     18.6     0.981   0.114      0   [0, 19, 0]  <-- best quality
+      fixed-L2                 100%     0.280    0.280     13.7     0.720   0.080      0   [0, 0, 19]
+      ORACLE tier              100%     0.019    0.019     18.6     0.981   0.114      0   [0, 19, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.019    0.019     18.6     0.981   0.114      0   [0, 19, 0]  <-- best quality
+
+    deadline 25s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                   0%       nan      nan      0.0     0.000   0.000      0   [0, 0, 0]
+      fixed-L1                 100%     0.019    0.019     10.8     0.981   0.065      0   [0, 11, 0]  <-- best quality
+      fixed-L2                 100%     0.280    0.280      7.9     0.720   0.047      0   [0, 0, 11]
+      ORACLE tier              100%     0.019    0.019     10.8     0.981   0.065      0   [0, 11, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.019    0.019     10.8     0.981   0.065      0   [0, 11, 0]  <-- best quality
+
+    deadline 40s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                 100%     0.000    0.000      7.0     1.000   0.047      0   [7, 0, 0]  <-- best quality
+      fixed-L1                 100%     0.019    0.019      6.9     0.981   0.040      0   [0, 7, 0]
+      fixed-L2                 100%     0.280    0.280      5.0     0.720   0.029      0   [0, 0, 7]
+      ORACLE tier              100%     0.000    0.000      7.0     1.000   0.047      0   [7, 0, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.000      7.0     1.000   0.047      0   [7, 0, 0]  <-- best quality
+
+  trace RF_2   [LOOPED - oracle only, not deployable evidence]
+
+    deadline 8s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                   0%       nan      nan      0.0     0.000   0.000      0   [0, 0, 0]
+      fixed-L1                  72%     0.019    0.019     25.5     0.709   0.135      0   [0, 26, 0]
+      fixed-L2                  89%     0.280    0.280     23.0     0.640   0.116      0   [0, 0, 32]
+      ORACLE tier               89%     0.060    0.280     30.1     0.836   0.159      0   [0, 27, 5]  <-- best quality
+      ORACLE tier + defer       89%     0.060    0.280     30.1     0.836   0.157      4   [0, 27, 5]  <-- best quality
+
+    deadline 15s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                   0%       nan      nan      0.0     0.000   0.000      0   [0, 0, 0]
+      fixed-L1                 100%     0.019    0.019     18.6     0.981   0.094      0   [0, 19, 0]  <-- best quality
+      fixed-L2                 100%     0.280    0.280     13.7     0.720   0.067      0   [0, 0, 19]
+      ORACLE tier              100%     0.019    0.019     18.6     0.981   0.094      0   [0, 19, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.019    0.019     18.6     0.981   0.094      0   [0, 19, 0]  <-- best quality
+
+    deadline 25s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                  36%     0.000    0.000      4.0     0.364   0.023      0   [4, 0, 0]
+      fixed-L1                 100%     0.019    0.019     10.8     0.981   0.054      0   [0, 11, 0]
+      fixed-L2                 100%     0.280    0.280      7.9     0.720   0.039      0   [0, 0, 11]
+      ORACLE tier              100%     0.012    0.019     10.9     0.988   0.058      0   [4, 7, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.012    0.019     10.9     0.988   0.058      0   [4, 7, 0]  <-- best quality
+
+    deadline 40s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                 100%     0.000    0.000      7.0     1.000   0.038      0   [7, 0, 0]  <-- best quality
+      fixed-L1                 100%     0.019    0.019      6.9     0.981   0.034      0   [0, 7, 0]
+      fixed-L2                 100%     0.280    0.280      5.0     0.720   0.024      0   [0, 0, 7]
+      ORACLE tier              100%     0.000    0.000      7.0     1.000   0.038      0   [7, 0, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.000      7.0     1.000   0.038      0   [7, 0, 0]  <-- best quality
+
+  trace RF_6   [LOOPED - oracle only, not deployable evidence]
+
+    deadline 8s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                   0%       nan      nan      0.0     0.000   0.000      0   [0, 0, 0]
+      fixed-L1                  36%     0.019    0.019     12.8     0.354   0.096      0   [0, 13, 0]
+      fixed-L2                  75%     0.280    0.280     19.4     0.540   0.140      0   [0, 0, 27]
+      ORACLE tier               75%     0.125    0.280     23.6     0.656   0.176      0   [0, 16, 11]
+      ORACLE tier + defer       78%     0.131    0.280     24.3     0.676   0.176      8   [0, 16, 12]  <-- best quality
+
+    deadline 15s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                   0%       nan      nan      0.0     0.000   0.000      0   [0, 0, 0]
+      fixed-L1                  95%     0.019    0.019     17.7     0.929   0.125      0   [0, 18, 0]
+      fixed-L2                 100%     0.280    0.280     13.7     0.720   0.093      0   [0, 0, 19]
+      ORACLE tier              100%     0.033    0.045     18.4     0.967   0.130      0   [0, 18, 1]  <-- best quality
+      ORACLE tier + defer      100%     0.033    0.045     18.4     0.967   0.130      0   [0, 18, 1]  <-- best quality
+
+    deadline 25s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                   0%       nan      nan      0.0     0.000   0.000      0   [0, 0, 0]
+      fixed-L1                 100%     0.019    0.019     10.8     0.981   0.076      0   [0, 11, 0]  <-- best quality
+      fixed-L2                 100%     0.280    0.280      7.9     0.720   0.055      0   [0, 0, 11]
+      ORACLE tier              100%     0.019    0.019     10.8     0.981   0.076      0   [0, 11, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.019    0.019     10.8     0.981   0.076      0   [0, 11, 0]  <-- best quality
+
+    deadline 40s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                  71%     0.000    0.000      5.0     0.714   0.039      0   [5, 0, 0]
+      fixed-L1                 100%     0.019    0.019      6.9     0.981   0.046      0   [0, 7, 0]
+      fixed-L2                 100%     0.280    0.280      5.0     0.720   0.033      0   [0, 0, 7]
+      ORACLE tier              100%     0.005    0.019      7.0     0.995   0.052      0   [5, 2, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.005    0.019      7.0     0.995   0.052      0   [5, 2, 0]  <-- best quality
+
+
+################################################################################################################
+### fft    L0 err 0.000 @ 2.87 mJ   L1 err 0.006 @ 1.91 mJ   L2 err 0.158 @ 1.44 mJ
+################################################################################################################
+
+  trace solar   [unlooped]
+
+    deadline 8s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                  81%     0.000    0.000     29.0     0.806   0.189      0   [29, 0, 0]
+      fixed-L1                 100%     0.006    0.006     35.8     0.994   0.220      0   [0, 36, 0]
+      fixed-L2                 100%     0.158    0.158     30.3     0.842   0.181      0   [0, 0, 36]
+      ORACLE tier              100%     0.001    0.006     36.0     0.999   0.232      0   [29, 7, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.001    0.006     36.0     0.999   0.232      0   [29, 7, 0]  <-- best quality
+
+    deadline 15s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                 100%     0.000    0.000     19.0     1.000   0.115      0   [19, 0, 0]  <-- best quality
+      fixed-L1                 100%     0.006    0.006     18.9     0.994   0.111      0   [0, 19, 0]
+      fixed-L2                 100%     0.158    0.158     16.0     0.842   0.093      0   [0, 0, 19]
+      ORACLE tier              100%     0.000    0.000     19.0     1.000   0.115      0   [19, 0, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.000     19.0     1.000   0.115      0   [19, 0, 0]  <-- best quality
+
+    deadline 25s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                 100%     0.000    0.000     11.0     1.000   0.066      0   [11, 0, 0]  <-- best quality
+      fixed-L1                 100%     0.006    0.006     10.9     0.994   0.065      0   [0, 11, 0]
+      fixed-L2                 100%     0.158    0.158      9.3     0.842   0.054      0   [0, 0, 11]
+      ORACLE tier              100%     0.000    0.000     11.0     1.000   0.066      0   [11, 0, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.000     11.0     1.000   0.066      0   [11, 0, 0]  <-- best quality
+
+    deadline 40s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                 100%     0.000    0.000      7.0     1.000   0.041      0   [7, 0, 0]  <-- best quality
+      fixed-L1                 100%     0.006    0.006      7.0     0.994   0.040      0   [0, 7, 0]
+      fixed-L2                 100%     0.158    0.158      5.9     0.842   0.034      0   [0, 0, 7]
+      ORACLE tier              100%     0.000    0.000      7.0     1.000   0.041      0   [7, 0, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.000      7.0     1.000   0.041      0   [7, 0, 0]  <-- best quality
+
+  trace RF_2   [LOOPED - oracle only, not deployable evidence]
+
+    deadline 8s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                  72%     0.000    0.000     26.0     0.722   0.136      0   [26, 0, 0]
+      fixed-L1                  89%     0.006    0.006     31.8     0.884   0.161      0   [0, 32, 0]
+      fixed-L2                  97%     0.158    0.158     29.5     0.819   0.145      0   [0, 0, 35]
+      ORACLE tier               97%     0.014    0.158     34.5     0.958   0.180      0   [27, 5, 3]  <-- best quality
+      ORACLE tier + defer       97%     0.014    0.158     34.5     0.958   0.180      1   [27, 5, 3]  <-- best quality
+
+    deadline 15s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                 100%     0.000    0.000     19.0     1.000   0.095      0   [19, 0, 0]  <-- best quality
+      fixed-L1                 100%     0.006    0.006     18.9     0.994   0.093      0   [0, 19, 0]
+      fixed-L2                 100%     0.158    0.158     16.0     0.842   0.077      0   [0, 0, 19]
+      ORACLE tier              100%     0.000    0.000     19.0     1.000   0.095      0   [19, 0, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.000     19.0     1.000   0.095      0   [19, 0, 0]  <-- best quality
+
+    deadline 25s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                 100%     0.000    0.000     11.0     1.000   0.054      0   [11, 0, 0]  <-- best quality
+      fixed-L1                 100%     0.006    0.006     10.9     0.994   0.053      0   [0, 11, 0]
+      fixed-L2                 100%     0.158    0.158      9.3     0.842   0.045      0   [0, 0, 11]
+      ORACLE tier              100%     0.000    0.000     11.0     1.000   0.054      0   [11, 0, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.000     11.0     1.000   0.054      0   [11, 0, 0]  <-- best quality
+
+    deadline 40s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                 100%     0.000    0.000      7.0     1.000   0.034      0   [7, 0, 0]  <-- best quality
+      fixed-L1                 100%     0.006    0.006      7.0     0.994   0.034      0   [0, 7, 0]
+      fixed-L2                 100%     0.158    0.158      5.9     0.842   0.028      0   [0, 0, 7]
+      ORACLE tier              100%     0.000    0.000      7.0     1.000   0.034      0   [7, 0, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.000      7.0     1.000   0.034      0   [7, 0, 0]  <-- best quality
+
+  trace RF_6   [LOOPED - oracle only, not deployable evidence]
+
+    deadline 8s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                  44%     0.000    0.000     16.0     0.444   0.119      0   [16, 0, 0]
+      fixed-L1                  75%     0.006    0.006     26.8     0.746   0.193      0   [0, 27, 0]
+      fixed-L2                  92%     0.158    0.158     27.8     0.772   0.193      0   [0, 0, 33]
+      ORACLE tier               92%     0.031    0.158     32.0     0.888   0.235      0   [16, 11, 6]
+      ORACLE tier + defer       92%     0.026    0.158     32.1     0.893   0.234      3   [16, 12, 5]  <-- best quality
+
+    deadline 15s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                  95%     0.000    0.000     18.0     0.947   0.127      0   [18, 0, 0]
+      fixed-L1                 100%     0.006    0.006     18.9     0.994   0.128      0   [0, 19, 0]
+      fixed-L2                 100%     0.158    0.158     16.0     0.842   0.107      0   [0, 0, 19]
+      ORACLE tier              100%     0.000    0.001     19.0     1.000   0.134      0   [18, 1, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.001     19.0     1.000   0.134      0   [18, 1, 0]  <-- best quality
+
+    deadline 25s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                 100%     0.000    0.000     11.0     1.000   0.077      0   [11, 0, 0]  <-- best quality
+      fixed-L1                 100%     0.006    0.006     10.9     0.994   0.075      0   [0, 11, 0]
+      fixed-L2                 100%     0.158    0.158      9.3     0.842   0.063      0   [0, 0, 11]
+      ORACLE tier              100%     0.000    0.000     11.0     1.000   0.077      0   [11, 0, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.000     11.0     1.000   0.077      0   [11, 0, 0]  <-- best quality
+
+    deadline 40s
+      policy                  compl  mean err  p95 err  quality  q/period    q/mJ  defer   mix
+      fixed-L0                 100%     0.000    0.000      7.0     1.000   0.047      0   [7, 0, 0]  <-- best quality
+      fixed-L1                 100%     0.006    0.006      7.0     0.994   0.046      0   [0, 7, 0]
+      fixed-L2                 100%     0.158    0.158      5.9     0.842   0.038      0   [0, 0, 7]
+      ORACLE tier              100%     0.000    0.000      7.0     1.000   0.047      0   [7, 0, 0]  <-- best quality
+      ORACLE tier + defer      100%     0.000    0.000      7.0     1.000   0.047      0   [7, 0, 0]  <-- best quality
+
+================================================================================================================
+quality = sum(1 - error) over tasks finished inside their deadline.
+An oracle result is a CEILING, not a policy: it reads the real future.
+Stage 2 must replace it with a causal estimator before any of this is
+deployable. Looped RF rows are oracle-only and carry no such claim.
+DONE

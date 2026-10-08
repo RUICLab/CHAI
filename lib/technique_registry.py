@@ -86,7 +86,12 @@ TECHNIQUE_REGISTRY: Dict[int, TechniqueEntry] = {
         3, "Function Memoization",
         memory_cost_kb=1.0,
         compute_cost_relative=0.5,
-        description="Cache results of expensive function calls.",
+        description=(
+            "Exact keyed reuse: return a previously computed result when the "
+            "current key equals the stored key; otherwise recompute and update "
+            "the key. Pointer identity is safe only while the pointed-to value "
+            "cannot mutate between calls."
+        ),
     ),
     4: TechniqueEntry(
         4, "Task Skipping",
@@ -98,7 +103,11 @@ TECHNIQUE_REGISTRY: Dict[int, TechniqueEntry] = {
         5, "Approximate Data Structures",
         memory_cost_kb=0.5,
         compute_cost_relative=0.6,
-        description="Bloom filters, skip lists, etc.",
+        applicable_apps=["stringsearch-iclib"],
+        description=(
+            "Bloom filters, skip lists and similar probabilistic containers. "
+            "Requires an existing lookup structure to replace."
+        ),
     ),
     6: TechniqueEntry(
         6, "Probabilistic Algorithms",
@@ -154,32 +163,60 @@ TECHNIQUE_REGISTRY: Dict[int, TechniqueEntry] = {
         requires_fpu=True,
         memory_cost_kb=1.0,
         compute_cost_relative=0.8,
-        description="Combine models of varying accuracy.",
+        applicable_apps=["ar-iclib", "accept-activityrec"],
+        description=(
+            "Combine models of varying accuracy. Requires the application to "
+            "contain more than one model of the same quantity."
+        ),
     ),
     15: TechniqueEntry(
         15, "Relaxed Consistency",
         memory_cost_kb=0.0,
         compute_cost_relative=0.3,
-        description="Ease consistency in distributed systems.",
+        applicable_apps=[],
+        description=(
+            "Ease consistency in distributed systems. Not applicable to "
+            "single-core bare-metal benchmarks: there is no replica or "
+            "coherence protocol to relax."
+        ),
     ),
     16: TechniqueEntry(
         16, "Sparse Computation",
         memory_cost_kb=0.0,
         compute_cost_relative=0.3,
-        description="Skip zero elements in sparse data.",
+        applicable_apps=["fft-iclib", "ar-iclib", "accept-activityrec"],
+        description=(
+            "Skip zero elements in sparse data. Requires a genuinely sparse "
+            "array or spectrum, not merely a loop over dense data."
+        ),
     ),
     17: TechniqueEntry(
         17, "Neural Network Pruning",
         requires_fpu=True,
         memory_cost_kb=2.0,
         compute_cost_relative=0.9,
-        description="Trim neural connections.",
+        applicable_apps=[],
+        description=(
+            "Trim neural connections. pcam-iclib and coughvid-iclib are both "
+            "CNNs, so this operator is relevant to them in principle. It is "
+            "still left unselected for a structural reason: pruning changes "
+            "tensor shapes and weight values and generally requires "
+            "retraining or fine-tuning, which makes it a model-level paired "
+            "transformation that must regenerate the exported C artifact. "
+            "This pipeline applies function-local rewrites to a fixed "
+            "artifact, so enabling pruning as a local operator would be "
+            "incorrect rather than merely inapplicable."
+        ),
     ),
     18: TechniqueEntry(
         18, "Approximate Joins",
         memory_cost_kb=0.5,
         compute_cost_relative=0.5,
-        description="Non-exact database joins.",
+        applicable_apps=[],
+        description=(
+            "Non-exact database joins. Not applicable: none of these "
+            "benchmarks performs a relational join."
+        ),
     ),
     19: TechniqueEntry(
         19, "Surrogate Functions",
@@ -239,25 +276,40 @@ TECHNIQUE_REGISTRY: Dict[int, TechniqueEntry] = {
         25, "Lazy Preprocessing",
         memory_cost_kb=0.5,
         compute_cost_relative=0.4,
-        applicable_apps=["stringsearch-iclib"],
+        # Withdrawn for the current function-at-a-time generator.  A correct
+        # lazy skip table requires validity metadata in init_search *and* a
+        # checked lookup in strsearch; the old single-function example kept
+        # the dominant 256-entry initialisation and saved no work.
+        applicable_apps=[],
         description=(
-            "Defer table construction in string-search algorithms."
+            "Withdrawn: requires a paired producer/consumer transformation."
         ),
     ),
     26: TechniqueEntry(
         26, "Bit-Shift EWMA",
         memory_cost_kb=0.0,
         compute_cost_relative=0.1,
-        applicable_apps=["lqi-iclib", "link-estimator"],
+        # lqi-iclib was mapped here in error: its source accumulates a
+        # delivery ratio with double arithmetic and contains no EWMA
+        # recurrence for this operator to replace. Offering T26 there gave the
+        # planner a transformation with no matching structure.
+        applicable_apps=["link-estimator"],
         description=(
-            "Replace FP EWMA with integer bit-shift arithmetic."
+            "Replace an existing FP EWMA recurrence with integer bit-shift "
+            "arithmetic. Requires the source to already compute an "
+            "exponentially weighted moving average."
         ),
     ),
     27: TechniqueEntry(
         27, "Nibble Lookup",
         memory_cost_kb=0.016,     # 16-byte nibble LUT
         compute_cost_relative=0.2,
-        applicable_apps=["bc-iclib"],
+        # Retired from the six-benchmark campaign after a canonical bc-iclib
+        # MSP430/RF_2/68uF microbenchmark.  Original byte-LUT recursion cost 5
+        # cycles; stride 1/2/3/4 cost 15/11/9/8 respectively.  Every T27 point
+        # was Pareto-dominated.  Its smaller table is a footprint benefit, but
+        # footprint is not rewarded by the experiment's objective.
+        applicable_apps=[],
         description=(
             "16-entry nibble LUT for popcount; stride knob skips nibbles."
         ),
@@ -267,19 +319,32 @@ TECHNIQUE_REGISTRY: Dict[int, TechniqueEntry] = {
         requires_fpu=True,
         memory_cost_kb=0.5,
         compute_cost_relative=0.6,
-        applicable_apps=["ar-iclib", "accept-activityrec"],
+        # T28 assumes a cheap time-domain tier and an expensive spectral tier
+        # with a classifier consuming both. ar-iclib and accept-activityrec
+        # compute only mean magnitude and stddev magnitude; there is no
+        # spectral tier for the gate to skip, so the operator had no matching
+        # structure in either benchmark (0 declared, 0 accepted).
+        applicable_apps=[],
         description=(
             "Tier-1/tier-2 feature gating to skip expensive spectral "
-            "computations."
+            "computations. Requires the source to compute a cheap feature "
+            "tier and a separate expensive spectral tier."
         ),
     ),
     29: TechniqueEntry(
         29, "Radix Variation",
         memory_cost_kb=0.0,
         compute_cost_relative=0.1,
+        # radix-bm is not one of the six MSP430 benchmarks, so T29 can never be
+        # selected in that experiment while still costing prompt budget and
+        # offering another label to mis-apply. Its knob is also categorical:
+        # only radix 2, 8, 10 and 16 have defined semantics, so an Integer
+        # RANGE [2, 16] lets the optimizer choose 3..15, which are undefined.
         applicable_apps=["radix-bm"],
         description=(
-            "Replace base-10 division with power-of-two bit-shift ops."
+            "Replace base-10 division with power-of-two bit-shift ops. "
+            "KNOB IS CATEGORICAL: only radix 2, 8, 10, 16 are defined; do not "
+            "declare it as an Integer RANGE."
         ),
     ),
     30: TechniqueEntry(
@@ -394,6 +459,11 @@ def get_applicable_techniques(app_name: str) -> Dict[int, TechniqueEntry]:
     applicable).
     
     """
+    # ``applicable_apps is None`` means "universally applicable".
+    # ``applicable_apps == []`` means "applicable to nothing", which is how
+    # categorically inapplicable operators (distributed-systems consistency,
+    # neural-network pruning, relational joins) are excluded from every
+    # benchmark in this suite. The two must not be conflated.
     return {
         tid: t for tid, t in TECHNIQUE_REGISTRY.items()
         if (t.applicable_apps is None or app_name in t.applicable_apps)

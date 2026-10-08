@@ -1,5 +1,48 @@
 Here are examples of approximation techniques beyond loop perforation. Each shows a before (original) and after (approximated) version. If applying any of these techniques, follow the pattern shown.
 
+### Example 0: Exact Keyed Reuse (Technique 3) — Filter Configuration
+
+This example is intentionally from outside the six evaluation benchmarks. Do
+not copy its identifiers into another program; reproduce the keyed-reuse
+structure using identifiers already declared in the target source.
+
+#### Original function
+
+```c
+static int demo_t3_coefficients[32];
+
+void demo_t3_configure_filter(const DemoT3FilterSpec *spec) {
+    for (int i = 0; i < 32; ++i)
+        demo_t3_coefficients[i] = demo_t3_compile_coefficient(spec, i);
+}
+```
+
+#### Reuse-enabled function
+
+```c
+static int demo_t3_coefficients[32];
+static const DemoT3FilterSpec *demo_t3_configured_spec;
+
+void demo_t3_configure_filter(const DemoT3FilterSpec *spec) {
+    /*Knob Variables Declaration Start*/
+    int exact_reuse_enabled = 1;
+    /*Knob Variables Declaration End*/
+
+    /* Pointer equality is a valid key only while the object at this address
+       remains immutable. Use a content/version key instead when it can mutate. */
+    if (exact_reuse_enabled && demo_t3_configured_spec == spec)
+        return;
+
+    for (int i = 0; i < 32; ++i)
+        demo_t3_coefficients[i] = demo_t3_compile_coefficient(spec, i);
+    demo_t3_configured_spec = spec;
+}
+```
+
+The hit guard must compare the current key with a stored key and return before
+the expensive miss path. The stored key is updated only after recomputation.
+The knob-off path recomputes exactly as the original did.
+
 ### Example 1: Early-Exit Approximation (Technique 21) — Binary Search
 
 #### Original function
@@ -37,10 +80,14 @@ int binary_search(int arr[], int size, int target) {
         else high = mid - 1;
         iterations++;
         if (early_exit_enabled && iterations >= max_iterations) {
-            break;
+            /* Approximate answer: give up and report the closest probe.
+               Only reachable when the knob is enabled. */
+            return arr[mid] <= target ? mid : -1;
         }
     }
-    return mid;
+    /* Identity path: with early_exit_enabled = 0 this function is
+       bit-identical to the original, including the -1 failure return. */
+    return -1;
 }
 ```
 
@@ -291,44 +338,18 @@ void threshold_array(int input[], int output[], int size, int thresh) {
 ```
 
 
-### Example 8: Lazy Preprocessing (Technique 25) — String Search Skip Table
+### Example 8: Lazy Preprocessing (Technique 25) — WITHDRAWN
 
-#### Original function
+The worked example for this operator has been withdrawn. Its "lazy" branch
+still ran the full 256-entry table initialisation it claimed to eliminate,
+making only the cheaper pattern loop lazy, so every implementation it taught
+saved nothing.
 
-```c
-void build_skip_table(char *pattern, int plen, int skip[256]) {
-    for (int i = 0; i < 256; i++)
-        skip[i] = plen;
-    for (int i = 0; i < plen - 1; i++)
-        skip[(unsigned char)pattern[i]] = plen - 1 - i;
-}
-```
-
-#### Approximated function
-
-```c
-void build_skip_table(char *pattern, int plen, int skip[256]) {
-    /*Knob Variables Declaration Start*/
-    int lazy_preprocess_enabled = 0;
-    int lazy_budget = 256;
-    /*Knob Variables Declaration End*/
-
-    if (lazy_preprocess_enabled == 0) {
-        /* Baseline: full table construction */
-        for (int i = 0; i < 256; i++)
-            skip[i] = plen;
-        for (int i = 0; i < plen - 1; i++)
-            skip[(unsigned char)pattern[i]] = plen - 1 - i;
-    } else {
-        /* Lazy: only initialize entries for pattern characters + budget */
-        for (int i = 0; i < 256; i++)
-            skip[i] = plen;
-        int budget = (lazy_budget < plen) ? lazy_budget : plen - 1;
-        for (int i = 0; i < budget; i++)
-            skip[(unsigned char)pattern[i]] = plen - 1 - i;
-    }
-}
-```
+A correct lazy skip table cannot be written one function at a time:
+`init_search` and `strsearch` share the table, so skipping entries requires
+validity metadata (generation tags or a bitmap) and a checked lookup on the
+search side. Until that paired transformation exists, do NOT emit a T25
+implementation: choose a different operator, or choose none.
 
 ### === AUTO-GENERATED FEW-SHOT START ===
 ### Card-Generated Example 1: 4-Bit Quantization (Technique 31)

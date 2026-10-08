@@ -1,0 +1,52 @@
+### sobel   error bound 0.05   (levels in bound: L0, L1)
+  deadline  method                    chosen on select half      HELD-OUT per_offered  in-bnd
+  8s        best fixed level          L1                                       0.1586      12
+            voltage table             v_hi=3.6  v_lo=2.4                       0.1447      11   [  -8.7% vs fixed]  mix=[0, 11, 1]
+  15s       best fixed level          L1                                       0.1169       9
+            voltage table             v_hi=3.6  v_lo=2.4                       0.1035       8   [ -11.5% vs fixed]  mix=[0, 8, 1]
+  25s       best fixed level          L1                                       0.0665       5
+            voltage table             v_hi=3.6  v_lo=2.4                       0.0530       4   [ -20.3% vs fixed]  mix=[0, 4, 1]
+  40s       best fixed level          L0                                       0.0478       3
+            voltage table             v_hi=2.4  v_lo=2.4                       0.0301       2   [ -37.0% vs fixed]  mix=[2, 0, 1]
+
+
+### sobel   error bound 0.3   (levels in bound: L0, L1, L2)
+  deadline  method                    chosen on select half      HELD-OUT per_offered  in-bnd
+  8s        best fixed level          L2                                       0.2215      18
+            voltage table             v_hi=3.6  v_lo=3.6                       0.2215      18   [  +0.0% vs fixed]  mix=[0, 0, 18]
+  15s       best fixed level          L1                                       0.1169       9
+            voltage table             v_hi=3.6  v_lo=2.4                       0.1164       9   [  -0.4% vs fixed]  mix=[0, 8, 1]
+  25s       best fixed level          L1                                       0.0665       5
+            voltage table             v_hi=3.6  v_lo=2.4                       0.0663       5   [  -0.4% vs fixed]  mix=[0, 4, 1]
+  40s       best fixed level          L0                                       0.0478       3
+            voltage table             v_hi=2.4  v_lo=2.4                       0.0452       3   [  -5.5% vs fixed]  mix=[2, 0, 1]
+
+
+### fft   error bound 0.05   (levels in bound: L0, L1)
+  deadline  method                    chosen on select half      HELD-OUT per_offered  in-bnd
+  8s        best fixed level          L1                                       0.2215      18
+            voltage table             v_hi=3.6  v_lo=2.4                       0.2089      17   [  -5.7% vs fixed]  mix=[0, 17, 1]
+  15s       best fixed level          L0                                       0.1160       9
+            voltage table             v_hi=2.4  v_lo=2.4                       0.1026       8   [ -11.6% vs fixed]  mix=[8, 0, 1]
+  25s       best fixed level          L0                                       0.0662       5
+            voltage table             v_hi=2.4  v_lo=2.4                       0.0527       4   [ -20.4% vs fixed]  mix=[4, 0, 1]
+  40s       best fixed level          L0                                       0.0412       3
+            voltage table             v_hi=2.4  v_lo=2.4                       0.0273       2   [ -33.7% vs fixed]  mix=[2, 0, 1]
+
+
+### fft   error bound 0.3   (levels in bound: L0, L1, L2)
+  deadline  method                    chosen on select half      HELD-OUT per_offered  in-bnd
+  8s        best fixed level          L1                                       0.2215      18
+            voltage table             v_hi=3.6  v_lo=2.4                       0.2211      18   [  -0.2% vs fixed]  mix=[0, 17, 1]
+  15s       best fixed level          L0                                       0.1160       9
+            voltage table             v_hi=2.4  v_lo=2.4                       0.1154       9   [  -0.5% vs fixed]  mix=[8, 0, 1]
+  25s       best fixed level          L0                                       0.0662       5
+            voltage table             v_hi=2.4  v_lo=2.4                       0.0659       5   [  -0.5% vs fixed]  mix=[4, 0, 1]
+  40s       best fixed level          L0                                       0.0412       3
+            voltage table             v_hi=2.4  v_lo=2.4                       0.0410       3   [  -0.5% vs fixed]  mix=[2, 0, 1]
+
+====================================================================================================
+Thresholds and comparator both chosen on the first half of one solar
+recording and scored on the second. One recording, one harvester type:
+this shows whether the idea is worth pursuing, not that it generalises.
+DONE

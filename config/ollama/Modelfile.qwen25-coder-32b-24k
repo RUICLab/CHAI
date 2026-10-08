@@ -1,0 +1,9 @@
+FROM qwen2.5-coder:32b
+
+# Same context and decoding settings as the 7B variant, so a model-size
+# comparison changes only the model. Measured peak prompt on the 7B sweep was
+# ~13.4K tokens (provider-reported, not estimated), so 24576 leaves headroom
+# without being chosen by guesswork.
+PARAMETER num_ctx 24576
+PARAMETER num_predict 2048
+PARAMETER temperature 0

@@ -1,0 +1,73 @@
+{
+ "run_dir": "experiment_results/planquality_20260906_164509",
+ "arms": {
+  "checkmate_baseline": {
+   "violation_events": 60,
+   "distinct_invalid_ids": 32,
+   "functions_attempted": 42,
+   "invalid_ids_per_attempt": 0.7619047619047619,
+   "attempts_per_violation": 1.875,
+   "distinct_by_seed": {
+    "seed_1": 10,
+    "seed_2": 11,
+    "seed_3": 11
+   },
+   "accepted_plans": 26,
+   "shipped_invalid_labels": 13,
+   "plans_carrying_a_false_label": 13,
+   "tag": "A",
+   "label": "CheckMate T1-T20, no control plane"
+  },
+  "operator_only_plus10": {
+   "violation_events": 35,
+   "distinct_invalid_ids": 19,
+   "functions_attempted": 42,
+   "invalid_ids_per_attempt": 0.4523809523809524,
+   "attempts_per_violation": 1.8421052631578947,
+   "distinct_by_seed": {
+    "seed_1": 7,
+    "seed_2": 7,
+    "seed_3": 5
+   },
+   "accepted_plans": 20,
+   "shipped_invalid_labels": 10,
+   "plans_carrying_a_false_label": 10,
+   "tag": "B",
+   "label": "CheckMate + 10 operators, no control plane"
+  },
+  "chai_plus10": {
+   "violation_events": 37,
+   "distinct_invalid_ids": 22,
+   "functions_attempted": 42,
+   "invalid_ids_per_attempt": 0.5238095238095238,
+   "attempts_per_violation": 2.466666666666667,
+   "distinct_by_seed": {
+    "seed_1": 7,
+    "seed_2": 7,
+    "seed_3": 8
+   },
+   "accepted_plans": 13,
+   "shipped_invalid_labels": 0,
+   "plans_carrying_a_false_label": 0,
+   "tag": "C",
+   "label": "CHAI, same 30 operators, control plane ON"
+  },
+  "chai_baseline_ops": {
+   "violation_events": 36,
+   "distinct_invalid_ids": 45,
+   "functions_attempted": 42,
+   "invalid_ids_per_attempt": 1.0714285714285714,
+   "attempts_per_violation": 2.5714285714285716,
+   "distinct_by_seed": {
+    "seed_1": 13,
+    "seed_2": 15,
+    "seed_3": 17
+   },
+   "accepted_plans": 12,
+   "shipped_invalid_labels": 0,
+   "plans_carrying_a_false_label": 0,
+   "tag": "D",
+   "label": "CHAI T1-T20, control plane ON"
+  }
+ }
+}

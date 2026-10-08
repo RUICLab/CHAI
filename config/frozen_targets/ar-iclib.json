@@ -1,0 +1,18 @@
+{
+  "app": "ar-iclib",
+  "selection_policy": "reachable source-defined computational functions; exclude main and I/O",
+  "target_functions": {
+    "ACCEL_singleSample": "approximate",
+    "acquire_window": "approximate",
+    "transform": "approximate",
+    "featurize": "approximate",
+    "classify": "approximate",
+    "record_stats": "approximate",
+    "warmup_sensor": "approximate",
+    "train": "approximate",
+    "recognize": "approximate",
+    "sqrt16": "approximate",
+    "main": "do not approximate"
+  },
+  "code_summary": "Activity-recognition pipeline. ACCEL_singleSample obtains one sample; acquire_window fills a sample window; transform thresholds noise; featurize computes mean and standard-deviation features; classify compares those features with trained models; record_stats accumulates class counts; warmup_sensor discards startup samples; train builds class models; recognize runs the inference pipeline; sqrt16 computes integer square root. The benchmark driver main is frozen."
+}

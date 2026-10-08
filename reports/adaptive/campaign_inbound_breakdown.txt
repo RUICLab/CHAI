@@ -1,0 +1,47 @@
+ARCHIVED 512-CELL CAMPAIGN, re-reported
+Raw 'completion' conflates useful and worthless output. At a 0.05 bound,
+sobel-L2 (error 0.280) scores ZERO, so a policy can complete everything
+and deliver nothing. Split out here; at the project's own 0.30 bound all
+three levels qualify and the distinction disappears.
+
+=== error bound 0.05 ===
+  policy                         completed  in-bound  wasted       %
+  fixed-L2                            1334         0    1334  100.0%
+  adaptive-chronos-q10                1330       213    1117   84.0%
+  server-learned                      1265       634     631   49.9%
+  reactive (on-device)                1292       702     590   45.7%
+  adaptive-persistence                1171       668     503   43.0%
+  adaptive-ewma                       1211       847     364   30.1%
+  server-forecast                     1211       847     364   30.1%
+  adaptive-chronos                    1241       886     355   28.6%
+  adaptive-oracle                     1331      1148     183   13.7%
+  hindsight (boundary oracle)         1333      1163     170   12.8%
+  fixed-L0                             574       574       0    0.0%
+  fixed-L1                            1154      1154       0    0.0%
+  bound-aware (e<=0.05)               1154      1154       0    0.0%
+  bound-aware+defer (e<=0.05)          917       917       0    0.0%
+
+=== error bound 0.3 ===
+  policy                         completed  in-bound  wasted       %
+  fixed-L0                             574       574       0    0.0%
+  fixed-L1                            1154      1154       0    0.0%
+  fixed-L2                            1334      1334       0    0.0%
+  adaptive-oracle                     1331      1331       0    0.0%
+  adaptive-persistence                1171      1171       0    0.0%
+  adaptive-ewma                       1211      1211       0    0.0%
+  adaptive-chronos                    1241      1241       0    0.0%
+  adaptive-chronos-q10                1330      1330       0    0.0%
+  reactive (on-device)                1292      1292       0    0.0%
+  hindsight (boundary oracle)         1333      1333       0    0.0%
+  bound-aware (e<=0.05)               1154      1154       0    0.0%
+  bound-aware+defer (e<=0.05)          917       917       0    0.0%
+  server-forecast                     1211      1211       0    0.0%
+  server-learned                      1265      1265       0    0.0%
+
+SERVER POLICIES, separated as requested:
+  server-forecast uses learn=FALSE -- it is NOT affected by the censored
+  calibration defect, and is identical to adaptive-ewma because at zero
+  radio cost the two are the same policy (1211 completed, 847 in-bound).
+  server-learned uses learn=TRUE. It completes MORE (1265 vs 1211) but
+  wastes more (49.9% vs 30.1%), netting 634 in-bound against 847 --
+  a 25% loss of useful work caused purely by enabling the unsound learner.

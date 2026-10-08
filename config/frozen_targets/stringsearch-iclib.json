@@ -1,0 +1,10 @@
+{
+  "app": "stringsearch-iclib",
+  "selection_policy": "reachable source-defined computational functions; exclude main and I/O",
+  "target_functions": {
+    "init_search": "approximate",
+    "strsearch": "approximate",
+    "main": "do not approximate"
+  },
+  "code_summary": "Boyer-Moore-Horspool-style string-search benchmark. init_search builds the 256-entry skip table and records the pattern; strsearch uses that table to scan a text and returns a matching address or NULL. The driver repeatedly searches fixed pattern pointers, creating a source-visible exact keyed-reuse opportunity in init_search. main is frozen to preserve the workload."
+}

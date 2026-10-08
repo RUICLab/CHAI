@@ -1,0 +1,13 @@
+{
+  "app": "fft-iclib",
+  "selection_policy": "reachable source-defined computational functions; exclude main and I/O",
+  "target_functions": {
+    "fft_radix2": "approximate",
+    "exp": "approximate",
+    "sin": "approximate",
+    "cos": "approximate",
+    "cexp": "approximate",
+    "main": "do not approximate"
+  },
+  "code_summary": "Radix-2 FFT benchmark. fft_radix2 performs butterfly stages; cexp constructs complex twiddle factors using the source-defined exp, sin, and cos series implementations. These local numerical routines are real computational source, not external PDG nodes. main is the frozen benchmark driver."
+}

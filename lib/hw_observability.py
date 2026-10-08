@@ -18,7 +18,7 @@ to pick from a hardware-specific menu.
 import json
 import os
 from datetime import datetime
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from lib.hardware_profile import HardwareProfile
 from lib.technique_registry import TechniqueEntry, TECHNIQUE_REGISTRY
@@ -50,6 +50,86 @@ def _build_rejection_reason(tech: TechniqueEntry, hw: HardwareProfile) -> Option
     if tech.memory_cost_kb > hw.ram_kb:
         reasons.append(f"needs {tech.memory_cost_kb} KB RAM (only {hw.ram_kb} KB)")
     return "; ".join(reasons) if reasons else None
+
+
+def _safe_hardware_name(hw: HardwareProfile) -> str:
+    """Return a filesystem-safe, stable label for a hardware profile."""
+    return hw.name.replace(" ", "_").replace("/", "_")
+
+
+def _decision_reason(
+    technique_id: int,
+    app_name: str,
+    hw: HardwareProfile,
+) -> str:
+    """Explain why a technique ID is not admissible for this run."""
+    tech = TECHNIQUE_REGISTRY.get(technique_id)
+    if tech is None:
+        return "unknown technique ID (not present in the CHAI registry)"
+
+    reasons = []
+    if tech.applicable_apps is not None and app_name not in tech.applicable_apps:
+        reasons.append(f"not applicable to {app_name}")
+    hw_reason = _build_rejection_reason(tech, hw)
+    if hw_reason:
+        reasons.append(hw_reason)
+    return "; ".join(reasons) if reasons else "not in the feasible technique set"
+
+
+def _technique_metadata(technique_id: int) -> Dict[str, Any]:
+    """Return serialisable identifier metadata, including unknown IDs."""
+    tech = TECHNIQUE_REGISTRY.get(technique_id)
+    return {
+        "technique_id": technique_id,
+        "technique_name": tech.name if tech is not None else "Unknown technique",
+    }
+
+
+def collect_infeasible_plan_entries(
+    json_path: str,
+    app_name: str,
+    hw: HardwareProfile,
+    feasible: Dict[int, TechniqueEntry],
+) -> List[Dict[str, Any]]:
+    """Snapshot infeasible ``apx_all.json`` entries before they are clamped.
+
+    Retaining the original entry lets an experiment report what plan was
+    discarded, rather than merely reporting its technique ID.
+    """
+    if not os.path.exists(json_path):
+        return []
+
+    try:
+        with open(json_path, "r") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    if not isinstance(data, list):
+        return []
+
+    discarded = []
+    for index, entry in enumerate(data):
+        if not isinstance(entry, dict):
+            continue
+        raw_ids = entry.get("technique_numbers", entry.get("technique_number", []))
+        if not isinstance(raw_ids, (list, tuple, set)):
+            raw_ids = [raw_ids] if raw_ids is not None else []
+        for raw_id in raw_ids:
+            try:
+                technique_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if technique_id in feasible:
+                continue
+            record = _technique_metadata(technique_id)
+            record.update({
+                "plan_entry_index": index,
+                "reason": _decision_reason(technique_id, app_name, hw),
+                "plan_entry": entry,
+            })
+            discarded.append(record)
+    return discarded
 
 
 def _print_rejections_terminal(
@@ -151,6 +231,136 @@ def write_rejection_json(
         print(f"[hw_observability] Rejection report saved to: {path}\n")
 
     return path
+
+
+# ---------------------------------------------------------------------------
+#  Complete approximation-plan decision audit
+# ---------------------------------------------------------------------------
+
+def _catalogue_exclusions(
+    app_name: str,
+    hw: HardwareProfile,
+    feasible: Dict[int, TechniqueEntry],
+) -> List[Dict[str, Any]]:
+    """List applicable techniques removed by the pre-LLM gatekeeper."""
+    from lib.technique_registry import get_applicable_techniques
+
+    exclusions = []
+    for technique_id, tech in sorted(get_applicable_techniques(app_name).items()):
+        if technique_id in feasible:
+            continue
+        exclusion = _technique_metadata(technique_id)
+        exclusion["reason"] = _decision_reason(technique_id, app_name, hw)
+        exclusions.append(exclusion)
+    return exclusions
+
+
+def _invalid_reference_records(
+    invalid_ids: Set[int],
+    app_name: str,
+    hw: HardwareProfile,
+) -> List[Dict[str, Any]]:
+    """Convert validator IDs into self-explanatory audit records."""
+    records = []
+    for technique_id in sorted(invalid_ids):
+        record = _technique_metadata(technique_id)
+        record["reason"] = _decision_reason(technique_id, app_name, hw)
+        records.append(record)
+    return records
+
+
+def write_approximation_plan_report(
+    app_name: str,
+    hw: HardwareProfile,
+    feasible: Dict[int, TechniqueEntry],
+    invalid_ids: Optional[Set[int]] = None,
+    clamped_entries: Optional[List[Dict[str, Any]]] = None,
+    validated_ids: Optional[Set[int]] = None,
+) -> Tuple[str, str]:
+    """Write machine- and presentation-readable decision reports for a run.
+
+    The report deliberately keeps three stages separate:
+
+    * ``pre_llm_catalogue_exclusions`` are choices withheld from the model.
+    * ``post_llm_rejected_references`` are model references caught by the
+      validator (which cause a retry when encountered during generation).
+    * ``final_clamped_plan_entries`` are concrete JSON plan entries removed
+      before evaluation.
+
+    Returning both paths makes it easy for the pipeline to surface the audit
+    trail in its normal run output.
+    """
+    _ensure_outputs_dir()
+    invalid_ids = invalid_ids or set()
+    clamped_entries = clamped_entries or []
+    validated_ids = validated_ids or set()
+    exclusions = _catalogue_exclusions(app_name, hw, feasible)
+    invalid_records = _invalid_reference_records(invalid_ids, app_name, hw)
+
+    safe_hw = _safe_hardware_name(hw)
+    base_name = f"approximation_plan_decisions_{app_name}_{safe_hw}"
+    json_path = os.path.join(_OUTPUTS_DIR, base_name + ".json")
+    markdown_path = os.path.join(_OUTPUTS_DIR, base_name + ".md")
+
+    payload = {
+        "schema_version": 1,
+        "timestamp": datetime.now().isoformat(),
+        "application": app_name,
+        "hardware": {
+            "name": hw.name,
+            "ram_kb": hw.ram_kb,
+            "has_fpu": hw.has_fpu,
+            "has_simd": hw.has_simd,
+            "energy_budget_mj": hw.energy_budget_mj,
+            "clock_mhz": hw.clock_mhz,
+        },
+        "summary": {
+            "feasible_technique_count": len(feasible),
+            "pre_llm_catalogue_exclusion_count": len(exclusions),
+            "post_llm_rejected_reference_count": len(invalid_records),
+            "final_clamped_plan_entry_count": len(clamped_entries),
+            "validated_technique_ids": sorted(validated_ids),
+        },
+        "pre_llm_catalogue_exclusions": exclusions,
+        "post_llm_rejected_references": invalid_records,
+        "final_clamped_plan_entries": clamped_entries,
+    }
+    with open(json_path, "w") as f:
+        json.dump(payload, f, indent=2)
+
+    with open(markdown_path, "w") as f:
+        f.write("# CHAI approximation-plan decision audit\n\n")
+        f.write(f"- Application: `{app_name}`\n")
+        f.write(f"- Hardware: `{hw.name}`\n")
+        f.write(f"- Generated: {payload['timestamp']}\n\n")
+        f.write("## Summary\n\n")
+        f.write("| Decision stage | Count | Meaning |\n")
+        f.write("| --- | ---: | --- |\n")
+        f.write(f"| Feasible techniques | {len(feasible)} | Available to the LLM |\n")
+        f.write(f"| Pre-LLM exclusions | {len(exclusions)} | Removed before prompting |\n")
+        f.write(f"| Post-LLM rejected references | {len(invalid_records)} | Caught by validator / retry path |\n")
+        f.write(f"| Final clamped plan entries | {len(clamped_entries)} | Removed from `apx_all.json` before evaluation |\n\n")
+
+        def write_records(title: str, records: List[Dict[str, Any]], entry: bool = False):
+            f.write(f"## {title}\n\n")
+            if not records:
+                f.write("None.\n\n")
+                return
+            f.write("| Technique | Name | Reason |\n")
+            f.write("| ---: | --- | --- |\n")
+            for record in records:
+                name = str(record["technique_name"]).replace("|", "\\|")
+                reason = str(record["reason"]).replace("|", "\\|")
+                f.write(f"| {record['technique_id']} | {name} | {reason} |\n")
+            if entry:
+                f.write("\nThe JSON companion file retains each original discarded plan entry.\n")
+            f.write("\n")
+
+        write_records("Pre-LLM catalogue exclusions", exclusions)
+        write_records("Post-LLM rejected references", invalid_records)
+        write_records("Final clamped plan entries", clamped_entries, entry=True)
+
+    return json_path, markdown_path
 
 
 # ---------------------------------------------------------------------------

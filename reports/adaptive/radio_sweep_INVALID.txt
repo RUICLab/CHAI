@@ -1,0 +1,214 @@
+How cheap must a server query be before server forecasting pays for itself?
+
+    PYTHONPATH=. python3 -m adaptive.radio_sweep
+
+Sensitivity analysis, not a campaign. One solar recording, 295 s of a 300 s
+capture so nothing loops.
+
+SCOPE, stated before the numbers. This measures ONE architecture: a server query
+per decision period. It is not a statement about server-assisted design in
+general -- batching several periods into one query, triggering queries only on
+unusual conditions, or piggybacking the forecast onto traffic the device already
+sends would all amortise the cost differently and are untested here.
+
+LATENCY IS MODELLED AS ZERO. The device asks and the answer is available
+immediately, with no packet loss and no retransmission. Every number here is
+therefore OPTIMISTIC for the server; real latency and retries can only move the
+break-even cost lower.
+
+PREDECLARED READING OF THE BREAK-EVEN COST, fixed before running:
+
+    above 200 uJ      a conventional low-power radio is viable
+    10 - 200 uJ       only a cheaper or amortised communication design is plausible
+    below 10 uJ       specialised backscatter or piggybacking is required
+    no break-even     server forecasting offers no efficiency value in that cell
+
+Reported per benchmark and deadline: per-offered efficiency, in-bound completion,
+radio energy actually spent, number of queries, and the break-even cost against
+both baselines.
+============================================================================================================
+
+
+############################################################################################################
+### sobel
+############################################################################################################
+
+  deadline 8s
+    baseline (no radio)         per_offered  in-bound compl
+    fixed-L1                         0.1518             64%
+    on-device slow ewma              0.1449             61%
+
+    server+ewma (quality-first)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+             0       0.0186         8%      0      0.00        0     -87.8% /   -87.2%
+             1       0.0186         8%      0      0.04       36     -87.8% /   -87.2%
+             2       0.0186         8%      0      0.07       36     -87.8% /   -87.2%
+             5       0.0186         8%      0      0.19       36     -87.8% /   -87.2%
+            10       0.0186         8%      0      0.36       36     -87.8% /   -87.2%
+            20       0.0186         8%      0      0.73       36     -87.7% /   -87.2%
+            50       0.0249        11%      0      1.80       36     -83.6% /   -82.8%
+           100       0.0250        11%      0      3.61       36     -83.5% /   -82.8%
+           200       0.0380        17%      0      7.21       36     -75.0% /   -73.8%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+      break-even vs slow-ewma : NO BREAK-EVEN -- no efficiency value at any radio cost
+
+    server+ewma (bound-aware)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+             0       0.0111         6%     34      0.00        0     -92.7% /   -92.3%
+             1       0.0111         6%     34      0.00       36     -92.7% /   -92.3%
+             2       0.0111         6%     34      0.00       36     -92.7% /   -92.3%
+             5       0.0111         6%     34      0.01       36     -92.7% /   -92.3%
+            10       0.0111         6%     34      0.02       36     -92.7% /   -92.3%
+            20       0.0111         6%     34      0.04       36     -92.7% /   -92.3%
+            50       0.0111         6%     34      0.10       36     -92.7% /   -92.3%
+           100       0.0111         6%     34      0.20       36     -92.7% /   -92.3%
+           200       0.0111         6%     34      0.40       36     -92.7% /   -92.3%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+      break-even vs slow-ewma : NO BREAK-EVEN -- no efficiency value at any radio cost
+
+    server+chronos (quality-first)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+Passing a tuple of `past_key_values` is deprecated and will be removed in Transformers v4.48.0. You should pass an instance of `EncoderDecoderCache` instead, e.g. `past_key_values=EncoderDecoderCache.from_legacy_cache(past_key_values)`.
+             0       0.0124         6%      0      0.00        0     -91.9% /   -91.5%
+             1       0.0124         6%      0      0.04       36     -91.9% /   -91.5%
+             2       0.0124         6%      0      0.07       36     -91.9% /   -91.5%
+             5       0.0124         6%      0      0.19       36     -91.9% /   -91.5%
+            10       0.0124         6%      0      0.36       36     -91.9% /   -91.5%
+            20       0.0124         6%      0      0.73       36     -91.8% /   -91.5%
+            50       0.0187         8%      0      1.80       36     -87.7% /   -87.1%
+           100       0.0187         8%      0      3.61       36     -87.7% /   -87.1%
+           200       0.0189         8%      0      7.20       36     -87.6% /   -87.0%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+      break-even vs slow-ewma : NO BREAK-EVEN -- no efficiency value at any radio cost
+
+    server+chronos (bound-aware)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+             0       0.0055         3%     35      0.00        0     -96.3% /   -96.2%
+             1       0.0055         3%     35      0.00       36     -96.3% /   -96.2%
+             2       0.0055         3%     35      0.00       36     -96.3% /   -96.2%
+             5       0.0055         3%     35      0.01       36     -96.3% /   -96.2%
+            10       0.0055         3%     35      0.01       36     -96.3% /   -96.2%
+            20       0.0055         3%     35      0.02       36     -96.3% /   -96.2%
+            50       0.0055         3%     35      0.05       36     -96.3% /   -96.2%
+           100       0.0055         3%     35      0.10       36     -96.3% /   -96.2%
+           200       0.0055         3%     35      0.20       36     -96.3% /   -96.2%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+      break-even vs slow-ewma : NO BREAK-EVEN -- no efficiency value at any radio cost
+
+  deadline 15s
+    baseline (no radio)         per_offered  in-bound compl
+    fixed-L1                         0.1160            100%
+    on-device slow ewma              0.1097             95%
+
+    server+ewma (quality-first)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+             0       0.0357        32%      0      0.00        0     -69.2% /   -67.5%
+             1       0.0357        32%      0      0.02       19     -69.2% /   -67.5%
+             2       0.0357        32%      0      0.04       19     -69.2% /   -67.5%
+             5       0.0357        32%      0      0.10       19     -69.2% /   -67.5%
+            10       0.0357        32%      0      0.19       19     -69.2% /   -67.5%
+            20       0.0478        42%      0      0.39       19     -58.8% /   -56.4%
+            50       0.0479        42%      0      0.95       19     -58.8% /   -56.4%
+           100       0.0479        42%      0      1.90       19     -58.7% /   -56.3%
+           200       0.0542        47%      0      3.80       19     -53.3% /   -50.6%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+      break-even vs slow-ewma : NO BREAK-EVEN -- no efficiency value at any radio cost
+
+    server+ewma (bound-aware)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+             0       0.0169        16%     16      0.00        0     -85.4% /   -84.6%
+             1       0.0169        16%     16      0.00       19     -85.4% /   -84.6%
+             2       0.0169        16%     16      0.01       19     -85.4% /   -84.6%
+             5       0.0169        16%     16      0.02       19     -85.4% /   -84.6%
+            10       0.0169        16%     16      0.03       19     -85.4% /   -84.6%
+            20       0.0169        16%     16      0.06       19     -85.4% /   -84.6%
+            50       0.0169        16%     16      0.15       19     -85.4% /   -84.6%
+           100       0.0169        16%     16      0.30       19     -85.4% /   -84.6%
+           200       0.0169        16%     16      0.60       19     -85.4% /   -84.6%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+      break-even vs slow-ewma : NO BREAK-EVEN -- no efficiency value at any radio cost
+
+    server+chronos (quality-first)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+             0       0.0297        26%      0      0.00        0     -74.4% /   -72.9%
+             1       0.0297        26%      0      0.02       19     -74.4% /   -72.9%
+             2       0.0297        26%      0      0.04       19     -74.4% /   -72.9%
+             5       0.0297        26%      0      0.10       19     -74.4% /   -72.9%
+            10       0.0297        26%      0      0.19       19     -74.4% /   -72.9%
+            20       0.0297        26%      0      0.39       19     -74.4% /   -72.9%
+            50       0.0297        26%      0      0.95       19     -74.4% /   -72.9%
+           100       0.0298        26%      0      1.90       19     -74.3% /   -72.9%
+           200       0.0542        47%      0      3.80       19     -53.3% /   -50.6%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+      break-even vs slow-ewma : NO BREAK-EVEN -- no efficiency value at any radio cost
+
+    server+chronos (bound-aware)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+             0       0.0169        16%     16      0.00        0     -85.4% /   -84.6%
+             1       0.0169        16%     16      0.00       19     -85.4% /   -84.6%
+             2       0.0169        16%     16      0.01       19     -85.4% /   -84.6%
+             5       0.0169        16%     16      0.02       19     -85.4% /   -84.6%
+            10       0.0169        16%     16      0.03       19     -85.4% /   -84.6%
+            20       0.0169        16%     16      0.06       19     -85.4% /   -84.6%
+            50       0.0169        16%     16      0.15       19     -85.4% /   -84.6%
+           100       0.0169        16%     16      0.30       19     -85.4% /   -84.6%
+           200       0.0227        21%     15      0.80       19     -80.4% /   -79.3%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+      break-even vs slow-ewma : NO BREAK-EVEN -- no efficiency value at any radio cost
+
+  deadline 25s
+    baseline (no radio)         per_offered  in-bound compl
+    fixed-L1                         0.0666            100%
+    on-device slow ewma              0.0604             91%
+
+    server+ewma (quality-first)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+             0       0.0481        73%      0      0.00        0     -27.7% /   -20.3%
+             1       0.0481        73%      0      0.01       11     -27.7% /   -20.3%
+             2       0.0481        73%      0      0.02       11     -27.7% /   -20.3%
+             5       0.0481        73%      0      0.06       11     -27.7% /   -20.3%
+            10       0.0481        73%      0      0.11       11     -27.7% /   -20.3%
+            20       0.0481        73%      0      0.22       11     -27.7% /   -20.3%
+            50       0.0481        73%      0      0.55       11     -27.7% /   -20.3%
+           100       0.0482        73%      0      1.10       11     -27.6% /   -20.2%
+           200       0.0483        73%      0      2.20       11     -27.5% /   -20.1%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+      break-even vs slow-ewma : NO BREAK-EVEN -- no efficiency value at any radio cost
+
+    server+ewma (bound-aware)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+             0       0.0415        64%      4      0.00        0     -37.7% /   -31.3%
+             1       0.0415        64%      4      0.01       11     -37.7% /   -31.3%
+             2       0.0415        64%      4      0.01       11     -37.7% /   -31.3%
+             5       0.0415        64%      4      0.04       11     -37.6% /   -31.3%
+            10       0.0415        64%      4      0.07       11     -37.6% /   -31.3%
+            20       0.0415        64%      4      0.14       11     -37.6% /   -31.3%
+            50       0.0415        64%      4      0.35       11     -37.6% /   -31.3%
+           100       0.0415        64%      4      0.70       11     -37.6% /   -31.2%
+           200       0.0416        64%      4      1.40       11     -37.5% /   -31.1%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+      break-even vs slow-ewma : NO BREAK-EVEN -- no efficiency value at any radio cost
+
+    server+chronos (quality-first)
+       cost uJ  per_offered   in-bound  defer  radio mJ  queries   vs fixed / vs slow-ewma
+             0       0.0604        91%      0      0.00        0      -9.3% /    +0.0%
+             1       0.0604        91%      0      0.01       11      -9.3% /    +0.0%
+             2       0.0604        91%      0      0.02       11      -9.3% /    +0.0%
+             5       0.0604        91%      0      0.06       11      -9.3% /    +0.0%
+            10       0.0604        91%      0      0.11       11      -9.3% /    +0.0%
+            20       0.0604        91%      0      0.22       11      -9.3% /    +0.0%
+            50       0.0604        91%      0      0.55       11      -9.2% /    +0.1%
+           100       0.0605        91%      0      1.10       11      -9.1% /    +0.1%
+           200       0.0606        91%      0      2.20       11      -8.9% /    +0.4%
+      break-even vs fixed-L1  : NO BREAK-EVEN -- no efficiency value at any radio cost
+Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/Users/neerajsolanki/Downloads/CHAI-Transfer/CHAIn/CHAI-latest/adaptive/radio_sweep.py", line 181, in <module>
+    main()
+  File "/Users/neerajsolanki/Downloads/CHAI-Transfer/CHAIn/CHAI-latest/adaptive/radio_sweep.py", line 169, in main
+    lo_uJ, hi_uJ = max(above), min(h for h in hi if h > max(above))
+ValueError: min() arg is an empty sequence
+DONE

@@ -1,0 +1,33 @@
+{
+  "decode_failures": [],
+  "embedding_dim": 2048,
+  "embedding_extraction_seconds": 58.581447366042994,
+  "feature_extractor": "PANNs Cnn14, checkpoint Cnn14_mAP=0.431, sample_rate=32000",
+  "logistic_regression_C": 0.01,
+  "medical_use_warning": "research benchmark only; not a diagnostic model",
+  "negative_examples": 500,
+  "positive_examples": 500,
+  "seed": 2028,
+  "selected_examples": 1000,
+  "status": "pilot",
+  "task": "COUGHVID self-reported COVID-19 vs healthy/symptomatic cough, PANNs Cnn14 (AudioSet-pretrained) frozen embedding + logistic probe",
+  "test": {
+    "accuracy": 0.565,
+    "auroc": 0.6049,
+    "balanced_accuracy": 0.565,
+    "sensitivity": 0.25,
+    "specificity": 0.88
+  },
+  "test_examples": 200,
+  "train_accuracy": 0.6166666666666667,
+  "train_examples": 600,
+  "validation_examples": 200,
+  "validation_l0": {
+    "accuracy": 0.535,
+    "auroc": 0.5931,
+    "balanced_accuracy": 0.535,
+    "sensitivity": 0.53,
+    "specificity": 0.54
+  },
+  "validation_selected_threshold": 0.5569515055032342
+}

@@ -98,6 +98,22 @@ def findFileOfFunc(func_name, files): #Cat 4
         if func_name in unique_functions:
             return file_name
 
+    # clangd can omit valid local definitions (observed for FFT's ``cexp``).
+    # Fall back to the same brace-aware source discovery used by entity
+    # recovery so every later stage resolves the target consistently.
+    from utils.source_functions import find_source_function_span
+
+    for file_name in files:
+        source_path = os.path.join("target", file_name)
+        try:
+            with open(source_path, encoding="utf-8") as source_file:
+                source = source_file.read()
+        except OSError:
+            continue
+        if find_source_function_span(source, func_name):
+            return file_name
+    return None
+
 
 def copyFiles(source_path, destination_path): #Cat 4
     # Ensure the destination directory exists, if not, create it
@@ -233,6 +249,35 @@ def getFunctionData(list_function_data, toFind): #Cat 4
             return function_data
     # Return None if no match is found
     return None
+
+
+def filterSourceTargets(target_functions, topological_order, entities):
+    """Return selected targets that have an extracted source definition.
+
+    PDG tools can include external/library calls such as ``sin`` or ``cexp``.
+    Those nodes are not rewriteable and must never reach the LLM pipeline.
+    """
+    source_functions = {
+        entity.get("functionName")
+        for entity in entities
+        if isinstance(entity, dict)
+        and entity.get("functionName")
+        and str(entity.get("completeFunction", "")).strip()
+    }
+    selected = []
+    rejected = []
+    for function in topological_order:
+        choice = target_functions.get(function) if isinstance(target_functions, dict) else None
+        if str(choice).lower() != "approximate":
+            continue
+        if function not in source_functions:
+            rejected.append({
+                "function": function,
+                "reason": "no extracted source definition (external/library/PDG-only node)",
+            })
+            continue
+        selected.append(function)
+    return selected, rejected
 
 
 def loadFormatExamples(): #Cat 1 -
@@ -390,8 +435,8 @@ def getFilesList(directory): #Cat 4 -
     for dirpath, dirnames, filenames in os.walk(directory):
         for filename in filenames:
             files.append(filename)
-    
-    return 
+
+    return files
 
 def getCodeBase(): #Cat 4 -N
     all_files = ""
@@ -409,20 +454,21 @@ def getCodeBase(): #Cat 4 -N
     return all_files
 
 def parseTargetFunctions(text):
-    
-    pattern = re.compile(r'\{.*?\}', re.DOTALL)
-    
-    # Find the first match (the dictionary in the text)
-    match = pattern.search(text)
-    
-    if match:
-        dict_string = match.group(0)
-        
-        # Safely evaluate the string to convert it into a Python dictionary
-        extracted_dict = ast.literal_eval(dict_string)
-        return extracted_dict
-    else:
+    if not isinstance(text, str):
         return None
+
+    pattern = re.compile(r'\{.*?\}', re.DOTALL)
+
+    # A local model may preface its answer with an example or a fenced block.
+    # Try every dictionary-shaped fragment rather than failing on the first.
+    for match in pattern.finditer(text):
+        try:
+            extracted_dict = ast.literal_eval(match.group(0))
+        except (SyntaxError, ValueError):
+            continue
+        if isinstance(extracted_dict, dict):
+            return extracted_dict
+    return None
     
 def Dprint(*message):
     global DEBUG
@@ -433,6 +479,8 @@ def itrPrint(data_tuples: tuple):
     """
     Takes a tuple and removes the last n lines and replaces them on terminal
     """
+    if isinstance(data_tuples, str):
+        data_tuples = (data_tuples,)
     for i in range(len(data_tuples)):
         sys.stdout.write("\033[F")  # Move cursor up one line
         sys.stdout.write("\033[K")  # Clear the line
@@ -440,4 +488,3 @@ def itrPrint(data_tuples: tuple):
 
     for item in data_tuples:
         print(item)
-

@@ -22,6 +22,35 @@ from collections import deque
 
 # --- RTL File Generation --- 
 
+def _write_deterministic_expand_makefile(target_path):
+    """Create a local Makefile for GCC RTL expansion without an LLM call."""
+    c_files = sorted(
+        name for name in os.listdir(target_path) if name.endswith(".c")
+    )
+    if not c_files:
+        raise RuntimeError(f"No C sources found in {target_path}")
+
+    objects = [name[:-2] + ".o" for name in c_files]
+    lines = [
+        "CC=gcc",
+        "CFLAGS=-fdump-rtl-expand -DLOCAL_RUN",
+        "",
+        "all: application",
+        "",
+    ]
+    for source, obj in zip(c_files, objects):
+        lines.extend([f"{obj}: {source}", f"\t$(CC) $(CFLAGS) -c {source} -o {obj}", ""])
+    lines.extend([
+        f"application: {' '.join(objects)}",
+        f"\t$(CC) {' '.join(objects)} -o application -lm",
+        "",
+        "clean:",
+        f"\trm -f {' '.join(objects)} application *.expand",
+        "",
+    ])
+    with open(os.path.join(target_path, "Makefile"), "w") as file:
+        file.write("\n".join(lines))
+
 def createRTLFile():
     dst_dir = "dependency_graphs/target"
     src_dir = "target/"
@@ -40,6 +69,21 @@ def createRTLFile():
     last_error = None
 
     try:
+        # A deterministic build is faster and avoids losing an entire run to
+        # markdown fences or an invalid Makefile emitted by a local model.
+        try:
+            _write_deterministic_expand_makefile(target_path)
+            with open(os.path.join(target_path, "compiler_log.txt"), "w") as output_file:
+                subprocess.run("make", shell=True, check=True, cwd=target_path,
+                               stdout=output_file, stderr=subprocess.STDOUT)
+            subprocess.run("egypt *.expand | dot -ofile", shell=True, check=True, cwd=target_path)
+            subprocess.run("make clean", shell=True, check=True, cwd=target_path)
+            Dprint("PDG generation succeeded with deterministic Makefile\n")
+            return
+        except Exception as error:
+            last_error = error
+            Dprint(f"Deterministic PDG Makefile failed; trying LLM fallback: {error}")
+
         for attempt in range(1, max_retries + 1):
             with open(log_file, 'w') as file:
                 file.write('')
@@ -274,4 +318,3 @@ def reverse_PDG(PDG, topological_order):
 
 # Dprint(PDG)
 # Dprint("Topological Order:", topological_order)
-

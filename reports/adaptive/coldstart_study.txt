@@ -1,0 +1,260 @@
+Cold versus warm start: how much of the big-capacitor penalty is one-off?
+
+    PYTHONPATH=. python3 -m adaptive.coldstart_study
+
+The capacitor sweep started every run at 0 V, so a 4700 uF device spent its first
+104 s of a 295 s run merely filling the tank before it could execute anything.
+That cost is paid ONCE. A device deployed for hours amortises it to nothing, so
+attributing the large-capacitor loss to the architecture rather than to the cold
+start would be wrong.
+
+    cold start   initial_v = 0 V        includes filling the capacitor
+    warm start   initial_v = 3.59 V     steady state, tank already full
+
+Startup latency is reported separately from post-boot behaviour so the two are
+never conflated again.
+
+Also widens the sweep beyond solar. The RF recordings are 25-52 s and the
+simulator tiles them to fill a run, so RF rows carry the usual looping caveat --
+they are indicative of capacitor dynamics, not evidence about RF predictability.
+============================================================================================================
+
+
+############################################################################################################
+### sobel
+############################################################################################################
+
+  solar  [unlooped]   deadline 8s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold     9.6s          L1   34.3              0.0     36   
+      500uF   warm     0.0s          L1   35.3              0.0     36   
+     1000uF   cold    18.3s          L1   33.4             31.9      3   
+     1000uF   warm     0.0s          L1   35.3             34.8      0   
+     2200uF   cold    44.0s          L1   30.4             30.4      5   
+     2200uF   warm     0.0s          L1   35.3             35.3      0   
+     4700uF   cold   104.6s          L1   22.6             22.1      9   
+     4700uF   warm     0.0s          L1   35.3             34.6      0   
+
+  solar  [unlooped]   deadline 15s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold     9.6s          L1   18.6              0.0     19   
+      500uF   warm     0.0s          L1   18.6              0.0     19   
+     1000uF   cold    18.3s          L1   17.7             16.7      2   
+     1000uF   warm     0.0s          L1   18.6             18.6      0   
+     2200uF   cold    44.0s          L1   16.7             15.7      3   
+     2200uF   warm     0.0s          L1   18.6             18.6      0   
+     4700uF   cold   104.6s          L1   11.8             11.8      5   LOOKUP WINS
+     4700uF   warm     0.0s          L1   18.6             18.8      0   LOOKUP WINS
+
+  RF_2  [LOOPED]   deadline 8s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    15.2s          L1   28.4              0.0     36   
+      500uF   warm     0.0s          L1   29.4              0.0     36   
+     1000uF   cold    20.8s          L1   30.4             29.8      4   
+     1000uF   warm     0.0s          L1   32.4             31.8      2   
+     2200uF   cold    46.4s          L1   30.4             30.4      4   
+     2200uF   warm     0.0s          L1   35.3             35.3      0   
+     4700uF   cold    92.8s          L1   24.5             24.6      9   LOOKUP WINS
+     4700uF   warm     0.0s          L1   35.3             35.4      0   LOOKUP WINS
+
+  RF_2  [LOOPED]   deadline 15s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    15.2s          L1   17.7              0.0     19   
+      500uF   warm     0.0s          L1   18.6              0.0     19   
+     1000uF   cold    20.8s          L1   17.7             16.7      2   
+     1000uF   warm     0.0s          L1   18.6             18.6      0   
+     2200uF   cold    46.4s          L1   15.7             15.7      3   
+     2200uF   warm     0.0s          L1   18.6             18.6      0   
+     4700uF   cold    92.8s          L1   12.8             12.8      5   LOOKUP WINS
+     4700uF   warm     0.0s          L1   18.6             18.8      0   LOOKUP WINS
+
+  RF_6  [LOOPED]   deadline 8s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    13.9s          L2   24.5              0.0     36   
+      500uF   warm     0.0s          L2   25.2              0.0     36   
+     1000uF   cold    20.6s          L2   24.5             26.8      6   LOOKUP WINS
+     1000uF   warm     0.0s          L2   25.9             29.5      3   LOOKUP WINS
+     2200uF   cold    62.7s          L1   28.4             28.4      7   
+     2200uF   warm     0.0s          L1   33.4             35.1      0   LOOKUP WINS
+     4700uF   cold   123.2s          L1   20.6             19.1     12   
+     4700uF   warm     0.0s          L1   35.3             32.2      0   
+
+  RF_6  [LOOPED]   deadline 15s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    13.9s          L1   17.7              0.0     19   
+      500uF   warm     0.0s          L1   18.6              0.0     19   
+     1000uF   cold    20.6s          L1   17.7             16.7      2   
+     1000uF   warm     0.0s          L1   18.6             18.6      0   
+     2200uF   cold    62.7s          L1   14.7             14.7      4   
+     2200uF   warm     0.0s          L1   18.6             18.6      0   
+     4700uF   cold   123.2s          L1   10.8             10.8      7   LOOKUP WINS
+     4700uF   warm     0.0s          L1   18.6             18.7      0   LOOKUP WINS
+
+  RF_7  [LOOPED]   deadline 8s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    19.1s          L2   23.8              0.0     36   
+      500uF   warm     0.0s          L2   24.5              0.0     36   
+     1000uF   cold    31.1s          L2   23.8             28.3      4   LOOKUP WINS
+     1000uF   warm     0.0s          L2   25.9             31.4      0   LOOKUP WINS
+     2200uF   cold    66.4s          L1   23.5             25.6      7   LOOKUP WINS
+     2200uF   warm     0.0s          L1   33.4             34.5      0   LOOKUP WINS
+     4700uF   cold   138.9s          L1   18.6             18.6     13   
+     4700uF   warm     0.0s          L1   35.3             30.1      0   
+
+  RF_7  [LOOPED]   deadline 15s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    19.1s          L1   17.7              0.0     19   
+      500uF   warm     0.0s          L1   18.6              0.0     19   
+     1000uF   cold    31.1s          L1   16.7             16.4      2   
+     1000uF   warm     0.0s          L1   18.6             18.6      0   
+     2200uF   cold    66.4s          L1   14.7             14.7      4   
+     2200uF   warm     0.0s          L1   18.6             18.6      0   
+     4700uF   cold   138.9s          L1    9.8              9.8      7   LOOKUP WINS
+     4700uF   warm     0.0s          L1   18.6             18.7      0   LOOKUP WINS
+
+  RF_9  [LOOPED]   deadline 8s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    20.3s          L2   24.5              0.0     36   
+      500uF   warm     0.0s          L2   25.2              0.0     36   
+     1000uF   cold    37.9s          L2   23.0             24.6      8   LOOKUP WINS
+     1000uF   warm     0.0s          L2   25.9             28.0      4   LOOKUP WINS
+     2200uF   cold    73.9s          L2   19.4             21.3      9   LOOKUP WINS
+     2200uF   warm     0.0s          L2   25.9             28.9      2   LOOKUP WINS
+     4700uF   cold   164.6s          L1   15.7             15.7     15   
+     4700uF   warm     0.0s          L1   28.4             26.6      2   
+
+  RF_9  [LOOPED]   deadline 15s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    20.3s          L1   17.7              0.0     19   
+      500uF   warm     0.0s          L1   18.6              0.0     19   
+     1000uF   cold    37.9s          L1   16.7             15.7      3   
+     1000uF   warm     0.0s          L1   18.6             18.6      0   
+     2200uF   cold    73.9s          L1   14.7             14.5      4   
+     2200uF   warm     0.0s          L1   18.6             18.6      0   
+     4700uF   cold   164.6s          L1    7.8              7.9      8   LOOKUP WINS
+     4700uF   warm     0.0s          L1   18.6             18.7      0   LOOKUP WINS
+
+
+############################################################################################################
+### fft
+############################################################################################################
+
+  solar  [unlooped]   deadline 8s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold     9.6s          L0   35.0             28.6      2   
+      500uF   warm     0.0s          L0   36.0             30.3      0   
+     1000uF   cold    18.3s          L0   34.0             33.8      2   
+     1000uF   warm     0.0s          L0   36.0             36.0      0   
+     2200uF   cold    44.0s          L0   31.0             31.0      5   
+     2200uF   warm     0.0s          L0   36.0             36.0      0   
+     4700uF   cold   104.6s          L0   23.0             23.0      9   
+     4700uF   warm     0.0s          L0   36.0             36.0      0   
+
+  solar  [unlooped]   deadline 15s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold     9.6s          L0   19.0             15.2      1   
+      500uF   warm     0.0s          L0   19.0             16.0      0   
+     1000uF   cold    18.3s          L0   18.0             17.0      2   
+     1000uF   warm     0.0s          L0   19.0             19.0      0   
+     2200uF   cold    44.0s          L0   17.0             16.0      3   
+     2200uF   warm     0.0s          L0   19.0             19.0      0   
+     4700uF   cold   104.6s          L0   12.0             12.0      5   
+     4700uF   warm     0.0s          L0   19.0             19.0      0   
+
+  RF_2  [LOOPED]   deadline 8s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    15.2s          L1   33.8             28.6      2   
+      500uF   warm     0.0s          L1   34.8             30.3      0   
+     1000uF   cold    20.8s          L1   33.8             33.0      3   
+     1000uF   warm     0.0s          L1   35.8             35.8      0   LOOKUP WINS
+     2200uF   cold    46.4s          L0   31.0             31.0      4   
+     2200uF   warm     0.0s          L0   36.0             36.0      0   
+     4700uF   cold    92.8s          L0   25.0             25.0      8   
+     4700uF   warm     0.0s          L0   36.0             36.0      0   
+
+  RF_2  [LOOPED]   deadline 15s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    15.2s          L0   18.0             15.2      1   
+      500uF   warm     0.0s          L0   19.0             16.0      0   
+     1000uF   cold    20.8s          L0   18.0             17.0      2   
+     1000uF   warm     0.0s          L0   19.0             19.0      0   
+     2200uF   cold    46.4s          L0   16.0             16.0      3   
+     2200uF   warm     0.0s          L0   19.0             19.0      0   
+     4700uF   cold    92.8s          L0   13.0             13.0      5   
+     4700uF   warm     0.0s          L0   19.0             19.0      0   
+
+  RF_6  [LOOPED]   deadline 8s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    13.9s          L1   33.8             28.6      2   
+      500uF   warm     0.0s          L1   34.8             30.3      0   
+     1000uF   cold    20.6s          L1   33.8             32.9      3   
+     1000uF   warm     0.0s          L1   35.8             35.9      0   LOOKUP WINS
+     2200uF   cold    62.7s          L0   29.0             29.0      6   
+     2200uF   warm     0.0s          L0   36.0             36.0      0   
+     4700uF   cold   123.2s          L0   21.0             21.0     12   
+     4700uF   warm     0.0s          L0   36.0             36.0      0   
+
+  RF_6  [LOOPED]   deadline 15s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    13.9s          L1   18.9             15.2      1   
+      500uF   warm     0.0s          L0   19.0             16.0      0   
+     1000uF   cold    20.6s          L0   18.0             17.0      2   
+     1000uF   warm     0.0s          L0   19.0             19.0      0   
+     2200uF   cold    62.7s          L0   15.0             15.0      4   
+     2200uF   warm     0.0s          L0   19.0             19.0      0   
+     4700uF   cold   123.2s          L0   11.0             11.0      6   
+     4700uF   warm     0.0s          L0   19.0             19.0      0   
+
+  RF_7  [LOOPED]   deadline 8s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    19.1s          L1   32.8             27.8      3   
+      500uF   warm     0.0s          L1   33.8             30.3      0   
+     1000uF   cold    31.1s          L1   32.8             32.0      4   
+     1000uF   warm     0.0s          L1   35.8             36.0      0   LOOKUP WINS
+     2200uF   cold    66.4s          L0   28.0             28.0      7   
+     2200uF   warm     0.0s          L0   36.0             36.0      0   
+     4700uF   cold   138.9s          L0   19.0             19.0     12   
+     4700uF   warm     0.0s          L0   36.0             36.0      0   
+
+  RF_7  [LOOPED]   deadline 15s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    19.1s          L0   18.0             14.3      2   
+      500uF   warm     0.0s          L0   19.0             16.0      0   
+     1000uF   cold    31.1s          L0   17.0             17.0      2   
+     1000uF   warm     0.0s          L0   19.0             19.0      0   
+     2200uF   cold    66.4s          L0   15.0             15.0      4   
+     2200uF   warm     0.0s          L0   19.0             19.0      0   
+     4700uF   cold   138.9s          L0   10.0             10.0      7   
+     4700uF   warm     0.0s          L0   19.0             19.0      0   
+
+  RF_9  [LOOPED]   deadline 8s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    20.3s          L1   33.8             27.8      3   
+      500uF   warm     0.0s          L1   34.8             30.3      0   
+     1000uF   cold    37.9s          L1   31.8             31.5      4   
+     1000uF   warm     0.0s          L1   35.8             35.8      0   
+     2200uF   cold    73.9s          L1   26.8             26.8      8   
+     2200uF   warm     0.0s          L1   35.8             34.9      1   
+     4700uF   cold   164.6s          L0   16.0             16.0     15   
+     4700uF   warm     0.0s          L0   36.0             36.0      0   
+
+  RF_9  [LOOPED]   deadline 15s
+        cap  start  startup  best fixed      q  V-lookup      q  defer   verdict
+      500uF   cold    20.3s          L0   18.0             14.3      2   
+      500uF   warm     0.0s          L0   19.0             16.0      0   
+     1000uF   cold    37.9s          L0   17.0             16.0      3   
+     1000uF   warm     0.0s          L0   19.0             19.0      0   
+     2200uF   cold    73.9s          L0   15.0             15.0      4   
+     2200uF   warm     0.0s          L0   19.0             19.0      0   
+     4700uF   cold   164.6s          L0    8.0              8.0      8   
+     4700uF   warm     0.0s          L0   19.0             19.0      0   
+
+============================================================================================================
+  cold-start: lookup beat the best fixed level in 11 of 80 cells
+  warm-start: lookup beat the best fixed level in 15 of 80 cells
+
+Task energy is still pinned at its 68 uF measurement. Larger
+capacitors change brown-out frequency and checkpoint overhead, so a
+hardware claim needs task energy re-measured per capacitor, or useful
+progress and checkpoint cost modelled explicitly.
+DONE

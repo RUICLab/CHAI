@@ -1,0 +1,203 @@
+{
+  "checkpoint": "reports/biomedical/pcam_pilot_seed2027.pt",
+  "development_train_examples": 24576,
+  "development_validation_examples": 8192,
+  "device": "cpu",
+  "history": [
+    {
+      "accuracy": 0.7996826171875,
+      "auroc": 0.8861048166636234,
+      "balanced_accuracy": 0.7994285609369977,
+      "epoch": 1,
+      "loss": 0.4712810715039571,
+      "sensitivity": 0.7752282260054281,
+      "specificity": 0.8236288958685672
+    },
+    {
+      "accuracy": 0.7520751953125,
+      "auroc": 0.8295583935659947,
+      "balanced_accuracy": 0.7527284201889592,
+      "epoch": 2,
+      "loss": 0.3894127430394292,
+      "sensitivity": 0.8149518874907475,
+      "specificity": 0.6905049528871708
+    },
+    {
+      "accuracy": 0.806884765625,
+      "auroc": 0.8945309810509661,
+      "balanced_accuracy": 0.8073505038667709,
+      "epoch": 3,
+      "loss": 0.3738503859688838,
+      "sensitivity": 0.8517147791759191,
+      "specificity": 0.7629862285576227
+    },
+    {
+      "accuracy": 0.6036376953125,
+      "auroc": 0.8303531004716619,
+      "balanced_accuracy": 0.5998144481727286,
+      "epoch": 4,
+      "loss": 0.3607920768360297,
+      "sensitivity": 0.23562792992844805,
+      "specificity": 0.9640009664170089
+    },
+    {
+      "accuracy": 0.824951171875,
+      "auroc": 0.912614042959537,
+      "balanced_accuracy": 0.8250882380099345,
+      "epoch": 5,
+      "loss": 0.351828102953732,
+      "sensitivity": 0.8381445842585739,
+      "specificity": 0.812031891761295
+    },
+    {
+      "accuracy": 0.73876953125,
+      "auroc": 0.896096878238193,
+      "balanced_accuracy": 0.7368362194400874,
+      "epoch": 6,
+      "loss": 0.34670109922687214,
+      "sensitivity": 0.5526770293609672,
+      "specificity": 0.9209954095192076
+    },
+    {
+      "accuracy": 0.8323974609375,
+      "auroc": 0.9205994122215031,
+      "balanced_accuracy": 0.8334901704385961,
+      "epoch": 7,
+      "loss": 0.3381577165176471,
+      "sensitivity": 0.9375771033802122,
+      "specificity": 0.72940323749698
+    },
+    {
+      "accuracy": 0.840576171875,
+      "auroc": 0.9151831074694223,
+      "balanced_accuracy": 0.8408738837129465,
+      "epoch": 8,
+      "loss": 0.330111269839108,
+      "sensitivity": 0.8692326671601283,
+      "specificity": 0.8125151002657647
+    }
+  ],
+  "levels": [
+    {
+      "accuracy": 0.73919677734375,
+      "auroc": 0.8379921095878383,
+      "balanced_accuracy": 0.7391652286764093,
+      "ci95": {
+        "auroc": [
+          0.8337887054109409,
+          0.8429993521501219
+        ],
+        "balanced_accuracy": [
+          0.7343683492831333,
+          0.743815575886027
+        ]
+      },
+      "estimated_macs": 811040,
+      "host_eval_seconds": 7.684095263946801,
+      "mac_reduction_vs_l0": 0.0,
+      "prediction_disagreement_vs_l0": 0.0,
+      "resolution": 64,
+      "sensitivity": 0.6653233192892472,
+      "specificity": 0.8130071380635715,
+      "validation_selected_threshold": 0.7222867608070374
+    },
+    {
+      "accuracy": 0.749053955078125,
+      "auroc": 0.8362623396398672,
+      "balanced_accuracy": 0.7490549132365388,
+      "ci95": {
+        "auroc": [
+          0.8325554422148574,
+          0.8399070162384247
+        ],
+        "balanced_accuracy": [
+          0.7444859161957049,
+          0.7539101438138873
+        ]
+      },
+      "estimated_macs": 456224,
+      "host_eval_seconds": 8.162608901038766,
+      "mac_reduction_vs_l0": 0.43748273821266526,
+      "prediction_disagreement_vs_l0": 0.088958740234375,
+      "resolution": 48,
+      "sensitivity": 0.7512975514440984,
+      "specificity": 0.7468122750289793,
+      "validation_selected_threshold": 0.5993431210517883
+    },
+    {
+      "accuracy": 0.73809814453125,
+      "auroc": 0.8309738029454512,
+      "balanced_accuracy": 0.7380823461936227,
+      "ci95": {
+        "auroc": [
+          0.8263851420482676,
+          0.8348987831120759
+        ],
+        "balanced_accuracy": [
+          0.7331919604272478,
+          0.7422437191385665
+        ]
+      },
+      "estimated_macs": 202784,
+      "host_eval_seconds": 8.050276720081456,
+      "mac_reduction_vs_l0": 0.749970408364569,
+      "prediction_disagreement_vs_l0": 0.09881591796875,
+      "resolution": 32,
+      "sensitivity": 0.7011052085241497,
+      "specificity": 0.7750594838630956,
+      "validation_selected_threshold": 0.5485849380493164
+    },
+    {
+      "accuracy": 0.7291259765625,
+      "auroc": 0.8197422126955107,
+      "balanced_accuracy": 0.7290954952153537,
+      "ci95": {
+        "auroc": [
+          0.8150042950515317,
+          0.8234513074604621
+        ],
+        "balanced_accuracy": [
+          0.7241696719960634,
+          0.7329942290344341
+        ]
+      },
+      "estimated_macs": 114080,
+      "host_eval_seconds": 7.75354551197961,
+      "mac_reduction_vs_l0": 0.8593410929177352,
+      "prediction_disagreement_vs_l0": 0.1275634765625,
+      "resolution": 24,
+      "sensitivity": 0.6577517249801551,
+      "specificity": 0.8004392654505521,
+      "validation_selected_threshold": 0.438333660364151
+    },
+    {
+      "accuracy": 0.71832275390625,
+      "auroc": 0.8001784354774034,
+      "balanced_accuracy": 0.7183066390343953,
+      "ci95": {
+        "auroc": [
+          0.7954600387173744,
+          0.8049632243289838
+        ],
+        "balanced_accuracy": [
+          0.7130861186240488,
+          0.7233475255751313
+        ]
+      },
+      "estimated_macs": 50720,
+      "host_eval_seconds": 7.746310716029257,
+      "mac_reduction_vs_l0": 0.9374630104557112,
+      "prediction_disagreement_vs_l0": 0.16802978515625,
+      "resolution": 16,
+      "sensitivity": 0.6805886303962875,
+      "specificity": 0.7560246476725032,
+      "validation_selected_threshold": 0.2765302360057831
+    }
+  ],
+  "parameters": 6121,
+  "seed": 2027,
+  "split_protocol": "official validation split used for development; official test untouched",
+  "status": "pilot",
+  "task": "PCam metastasis present vs absent",
+  "test_examples": 32768
+}
